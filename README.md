@@ -25,7 +25,7 @@ Highly optimized, real-time ballistic physics simulation engine paired with an *
   - [x] Anti-cheat safety guardrails preventing negative mass or unphysical fuel ratios (\(m_{fuel} \le 10 \cdot m_{dry}\)).
   - [x] Real-time TCP network bridge linking Go & Python pipelines.
   - [x] Macro-mutation engine (`ExclusiveChild`) with dynamic scale adaptation to break local minima stagnation.
-- [ ] **v1.1.0 — Future Enhancements**
+- [ ] **v2.0.0 — Future Enhancements**
   - [ ] Implementation of full 3D spatial flight dynamics using the `YawDegree` gene.
   - [ ] Dynamic wind vectors and true coriolis effect calculations.
 
