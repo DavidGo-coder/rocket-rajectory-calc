@@ -6,399 +6,17 @@ import (
 	"io"
 	"log"
 	"math"
-	"math/rand/v2"
 	"net"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/DavidGo-coder/rocket-trajectory-calc/genetic"
+	"github.com/DavidGo-coder/rocket-trajectory-calc/simulation"
 )
 
-type Rocket struct {
-	PitchDegree      float64
-	YawDegree        float64
-	Fuel             float64
-	BurnRate         float64
-	EngineEfficiency float64
-	Fitness          float64
-	X, Y, Z          float64
-	RocketBudyMass   float64
-	TrajectoryCSV    string
-}
-
-const (
-	ThrustForce           = 1500.0
-	OneMomentSimulation   = 0.01
-	GravitationalConstant = 9.81
-	RadiusPlanetEarth     = 6371000.0
-	AirResistance         = 0.02
-)
-
-func CalculationTrajectory(TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize int, BodyMassPopulation float64, RocketPopulation2 []Rocket) ([]Rocket, float64) {
-	var wg sync.WaitGroup
-	wg.Add(PopulationSize)
-
-	type ResultSimulation struct {
-		X             float64
-		Y             float64
-		TrajectoryCSV string
-		Sucess        float64
-		ResultIndex   int
-	}
-
-	ChannelResultSimulation := make(chan ResultSimulation, PopulationSize)
-
-	for CountPopulationSizeSimulation := 0; CountPopulationSizeSimulation < PopulationSize; CountPopulationSizeSimulation++ {
-		go func(Index int, Fuel, PitchDegree, YawDegree, BurnRate, EngineEfficiency float64) {
-			defer wg.Done()
-
-			PitchRadians := PitchDegree * math.Pi / 180.0
-			Vx, Vy := 0.0, 0.0
-			X, Y := 0.0, 0.0
-			Time := 0.0
-			maxY := 0.0
-
-			var TrajectoryPoints []string
-			StepCounter := 0
-
-			targetX := float64(TargetCoordinateX)
-			targetY := float64(TargetCoordinateY)
-
-			MinDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY)
-
-			for Time < 100.0 {
-				CurrentMass := BodyMassPopulation + Fuel
-				if CurrentMass < BodyMassPopulation {
-					CurrentMass = BodyMassPopulation
-				}
-
-				var ThrustForceX, ThrustForceY float64
-				if Fuel > 0 {
-					DynamicThrust := BurnRate * EngineEfficiency
-
-					FuelConsumed := BurnRate * OneMomentSimulation
-					if FuelConsumed > Fuel {
-						DynamicThrust = (Fuel / OneMomentSimulation) * EngineEfficiency
-						Fuel = 0
-					} else {
-						Fuel -= FuelConsumed
-					}
-
-					ThrustForceX = DynamicThrust * math.Cos(PitchRadians)
-					ThrustForceY = DynamicThrust * math.Sin(PitchRadians)
-				}
-
-				var FdragX, FdragY float64
-				V := math.Sqrt(Vx*Vx + Vy*Vy)
-				if V > 0.001 {
-					CurrentDragCoef := AirResistance * math.Exp(-Y/8500.0)
-					FdragTotal := CurrentDragCoef * V * V
-
-					FdragX = FdragTotal * (Vx / V)
-					FdragY = FdragTotal * (Vy / V)
-				}
-
-				CurrentGravitation := GravitationalConstant * math.Pow(RadiusPlanetEarth/(RadiusPlanetEarth+Y), 2)
-
-				Ax := (ThrustForceX - FdragX) / CurrentMass
-				Ay := ((ThrustForceY - FdragY) / CurrentMass) - CurrentGravitation
-
-				X += Vx * OneMomentSimulation
-				Y += Vy * OneMomentSimulation
-				Vx += Ax * OneMomentSimulation
-				Vy += Ay * OneMomentSimulation
-
-				if Y <= 0 && Vy < 0 {
-					Y = 0
-					Vx = 0
-					Vy = 0
-					if Time > 0.5 {
-						break
-					}
-				}
-
-				if Y > maxY {
-					maxY = Y
-				}
-
-				Dx := targetX - X
-				Dy := targetY - Y
-				CurrentDist := math.Sqrt(Dx*Dx + Dy*Dy)
-
-				if CurrentDist < MinDistToTarget {
-					MinDistToTarget = CurrentDist
-				}
-
-				// Запись точек траектории
-				if StepCounter%50 == 0 {
-					TrajectoryPoints = append(TrajectoryPoints, fmt.Sprintf("%.2f,%.2f", X, Y))
-				}
-				StepCounter++
-				Time += OneMomentSimulation
-			}
-
-			TrajectoryPoints = append(TrajectoryPoints, fmt.Sprintf("%.2f,%.2f", X, Y))
-
-			EfficiencyRating := MinDistToTarget
-
-			if X < 5.0 && maxY < 5.0 {
-				EfficiencyRating += 50000.0
-			} else {
-
-				if MinDistToTarget < 500.0 {
-					EfficiencyRating -= Fuel * 2.0
-				}
-			}
-
-			ChannelResultSimulation <- ResultSimulation{
-				X:             X,
-				Y:             maxY,
-				Sucess:        EfficiencyRating,
-				TrajectoryCSV: strings.Join(TrajectoryPoints, ";"),
-				ResultIndex:   Index,
-			}
-		}(CountPopulationSizeSimulation, RocketPopulation2[CountPopulationSizeSimulation].Fuel, RocketPopulation2[CountPopulationSizeSimulation].PitchDegree, RocketPopulation2[CountPopulationSizeSimulation].YawDegree, RocketPopulation2[CountPopulationSizeSimulation].BurnRate, RocketPopulation2[CountPopulationSizeSimulation].EngineEfficiency)
-	}
-	wg.Wait()
-	close(ChannelResultSimulation)
-
-	for Result := range ChannelResultSimulation {
-		RocketPopulation2[Result.ResultIndex].Fitness = Result.Sucess
-		RocketPopulation2[Result.ResultIndex].X = Result.X
-		RocketPopulation2[Result.ResultIndex].Y = Result.Y
-		RocketPopulation2[Result.ResultIndex].TrajectoryCSV = Result.TrajectoryCSV
-	}
-
-	sort.Slice(RocketPopulation2[:PopulationSize], func(i, j int) bool {
-		return RocketPopulation2[i].Fitness < RocketPopulation2[j].Fitness
-	})
-
-	MedianPopulation := RocketPopulation2[PopulationSize/2].Fitness
-	fmt.Printf("🧬 [EVOLUTION] Processing generation... Median target miss: %.2f meters\n", MedianPopulation)
-
-	var SliceTenBestRocket []Rocket
-	for b := 0; b < 10 && b < PopulationSize; b++ {
-		SliceTenBestRocket = append(SliceTenBestRocket, RocketPopulation2[b])
-	}
-
-	return SliceTenBestRocket, MedianPopulation
-}
-
-func FirstGeneticCalculation(FirstRocket Rocket, PopulationSize int, RocketBudyMass float64) []Rocket {
-	RocketPopulation := make([]Rocket, 0, PopulationSize)
-
-	if FirstRocket.PitchDegree < 0 {
-		FirstRocket.PitchDegree = 0
-	}
-	if FirstRocket.PitchDegree > 90 {
-		FirstRocket.PitchDegree = 90
-	}
-	if FirstRocket.YawDegree < 0 {
-		FirstRocket.YawDegree = 0
-	}
-	if FirstRocket.YawDegree > 90 {
-		FirstRocket.YawDegree = 90
-	}
-	if FirstRocket.Fuel < 5.0 {
-		FirstRocket.Fuel = 5.0
-	}
-	if FirstRocket.Fuel > RocketBudyMass*10.0 {
-		FirstRocket.Fuel = 100.0
-	}
-	if FirstRocket.BurnRate < 0.5 {
-		FirstRocket.BurnRate = 0.5
-	}
-	if FirstRocket.EngineEfficiency < 500.0 {
-		FirstRocket.EngineEfficiency = 500.0
-	}
-	if FirstRocket.EngineEfficiency > 2500.0 {
-		FirstRocket.EngineEfficiency = 2500.0
-	}
-
-	RocketPopulation = append(RocketPopulation, FirstRocket)
-
-	if PopulationSize > 5 {
-		RocketPopulation = append(RocketPopulation, Rocket{PitchDegree: 45.0, YawDegree: FirstRocket.YawDegree, Fuel: 100.0, BurnRate: FirstRocket.BurnRate, EngineEfficiency: 2000})
-
-		RocketPopulation = append(RocketPopulation, Rocket{PitchDegree: 35.0, YawDegree: FirstRocket.YawDegree, Fuel: 100.0, BurnRate: 8.0, EngineEfficiency: 2000})
-
-		RocketPopulation = append(RocketPopulation, Rocket{PitchDegree: 65.0, YawDegree: FirstRocket.YawDegree, Fuel: 100.0, BurnRate: FirstRocket.BurnRate, EngineEfficiency: 2000})
-	}
-
-	for i := len(RocketPopulation); i < PopulationSize; i++ {
-		PitchRand := FirstRocket.PitchDegree + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-		YawRand := FirstRocket.YawDegree + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-		FuelRand := FirstRocket.Fuel + (((rand.Float64() * 2.0) - 1.0) * (FirstRocket.Fuel * 0.1))
-		BurnRateRand := FirstRocket.BurnRate + (((rand.Float64() * 2.0) - 1.0) * 0.5)
-		EngineEfficiencyRand := FirstRocket.EngineEfficiency + ((rand.Float64()*2.0 - 1.0) * 400.0)
-
-		if PitchRand < 0 {
-			PitchRand = 0
-		}
-		if PitchRand > 90 {
-			PitchRand = 90
-		}
-		if FirstRocket.YawDegree < 0 {
-			FirstRocket.YawDegree = 0
-		}
-		if FirstRocket.YawDegree > 90 {
-			FirstRocket.YawDegree = 90
-		}
-		if FuelRand < 5.0 {
-			FuelRand = 5.0
-		}
-		if FuelRand > RocketBudyMass*10.0 {
-			FuelRand = 100.0
-		}
-		if BurnRateRand < 0.5 {
-			BurnRateRand = 0.5
-		}
-		if EngineEfficiencyRand < 500.0 {
-			EngineEfficiencyRand = 500.0
-		}
-		if EngineEfficiencyRand > 2500.0 {
-			EngineEfficiencyRand = 2500.0
-		}
-
-		RocketRand := Rocket{PitchDegree: PitchRand, YawDegree: YawRand, Fuel: FuelRand, BurnRate: BurnRateRand, EngineEfficiency: EngineEfficiencyRand}
-		RocketPopulation = append(RocketPopulation, RocketRand)
-	}
-	return RocketPopulation
-}
-
-func GeneticCalculation(SliceTenBestRocket []Rocket, PopulationSize int, MedianPopulation, RocketBudyMass float64) []Rocket {
-	RocketPopulation2 := make([]Rocket, 0, PopulationSize)
-
-	LenSliceBestRocket := len(SliceTenBestRocket)
-
-	if LenSliceBestRocket == 0 {
-		return make([]Rocket, 100)
-	}
-
-	SliceTenBestSortedRocket := make([]Rocket, LenSliceBestRocket)
-	for a := 0; a < LenSliceBestRocket; a++ {
-		RandInt := rand.IntN(LenSliceBestRocket)
-		SliceTenBestSortedRocket[a] = SliceTenBestRocket[RandInt]
-	}
-
-	for i := 0; i < LenSliceBestRocket; i++ {
-		RocketPopulation2 = append(RocketPopulation2, SliceTenBestRocket[i])
-		for j := 0; j < 9; j++ {
-			if (j == 0 && i == 0) || (j == 5 && i == 5) {
-
-				FirstParent := SliceTenBestSortedRocket[j]
-				SecondParent := SliceTenBestSortedRocket[(j+1)%LenSliceBestRocket]
-
-				ExclusivePitchRand := rand.Float64()
-				ExclusiveYawRand := rand.Float64()
-				ExclusiveFuelRand := rand.Float64()
-				ExclusiveBurnRateRand := rand.Float64()
-				ExclusiveEngineEfficiencyRand := rand.Float64()
-
-				ExclusivePitch := (FirstParent.PitchDegree*ExclusivePitchRand + SecondParent.PitchDegree*(1.0-ExclusivePitchRand)) + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-				ExclusiveYaw := (FirstParent.YawDegree*ExclusiveYawRand + SecondParent.YawDegree*(1.0-ExclusiveYawRand)) + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-				ExclusiveFuel := (FirstParent.Fuel*ExclusiveFuelRand+SecondParent.Fuel*(1.0-ExclusiveFuelRand))*(MedianPopulation/500+1.0) + rand.Float64()*4.0 - 2.0
-				ExclusiveBurnRate := math.Max(0.5, (FirstParent.BurnRate*ExclusiveBurnRateRand+SecondParent.BurnRate*(1.0-ExclusiveBurnRateRand))*(MedianPopulation/500+1.0)+rand.Float64()*0.4-0.2)
-				ExclusiveEngineEfficiency := (FirstParent.EngineEfficiency*ExclusiveEngineEfficiencyRand+SecondParent.EngineEfficiency*(1.0-ExclusiveEngineEfficiencyRand))*(MedianPopulation/500+1.0) + rand.Float64()*4.0 - 2.0
-
-				if ExclusivePitch < 0 {
-					ExclusivePitch = 0
-				}
-				if ExclusivePitch > 90 {
-					ExclusivePitch = 90
-				}
-				if ExclusiveYaw < 0 {
-					ExclusiveYaw = 0
-				}
-				if ExclusiveYaw > 90 {
-					ExclusiveYaw = 90
-				}
-				if ExclusiveFuel < 5.0 {
-					ExclusiveFuel = 5.0
-				}
-				if ExclusiveFuel > RocketBudyMass*10.0 {
-					ExclusiveFuel = 100.0
-				}
-				if ExclusiveBurnRate < 0.5 {
-					ExclusiveBurnRate = 0.5
-				}
-				if ExclusiveEngineEfficiency < 500.0 {
-					ExclusiveEngineEfficiency = 500.0
-				}
-				if ExclusiveEngineEfficiency > 2500.0 {
-					ExclusiveEngineEfficiency = 2500.0
-				}
-
-				ExclusiveChild := Rocket{
-					PitchDegree:      ExclusivePitch,
-					YawDegree:        ExclusiveYaw,
-					Fuel:             ExclusiveFuel,
-					BurnRate:         ExclusiveBurnRate,
-					EngineEfficiency: ExclusiveEngineEfficiency,
-				}
-
-				RocketPopulation2 = append(RocketPopulation2, ExclusiveChild)
-			}
-
-			FirstParent := SliceTenBestSortedRocket[j]
-			SecondParent := SliceTenBestSortedRocket[(j+1)%LenSliceBestRocket]
-
-			ChildPitchRand := rand.Float64()
-			ChildYawRand := rand.Float64()
-			ChildFuelRand := rand.Float64()
-			ChildBurnRateRand := rand.Float64()
-			ChildEngineEfficiencyRand := rand.Float64()
-
-			ChildPitch := (FirstParent.PitchDegree*ChildPitchRand + SecondParent.PitchDegree*(1.0-ChildPitchRand)) + rand.Float64()*6.0 - 3.0
-			ChildYaw := (FirstParent.YawDegree*ChildYawRand + SecondParent.YawDegree*(1.0-ChildYawRand)) + rand.Float64()*6.0 - 3.0
-			ChildFuel := (FirstParent.Fuel*ChildFuelRand + SecondParent.Fuel*(1.0-ChildFuelRand)) + rand.Float64()*4.0 - 2.0
-			ChildBurnRate := math.Max(0.5, (FirstParent.BurnRate*ChildBurnRateRand+SecondParent.BurnRate*(1.0-ChildBurnRateRand))+rand.Float64()*0.4-0.2)
-			ChildEngineEfficiency := (FirstParent.EngineEfficiency*ChildEngineEfficiencyRand + SecondParent.EngineEfficiency*(1.0-ChildEngineEfficiencyRand)) + rand.Float64()*10.0 - 5.0
-
-			if ChildPitch < 0 {
-				ChildPitch = 0
-			}
-			if ChildPitch > 90 {
-				ChildPitch = 90
-			}
-			if ChildYaw < 0 {
-				ChildYaw = 0
-			}
-			if ChildYaw > 90 {
-				ChildYaw = 90
-			}
-			if ChildFuel < 5.0 {
-				ChildFuel = 5.0
-			}
-			if ChildFuel > RocketBudyMass*10.0 {
-				ChildFuel = 100.0
-			}
-			if ChildBurnRate < 0.5 {
-				ChildBurnRate = 0.5
-			}
-			if ChildEngineEfficiency < 500.0 {
-				ChildEngineEfficiency = 500.0
-			}
-			if ChildEngineEfficiency > 2500.0 {
-				ChildEngineEfficiency = 2500.0
-			}
-
-			Child := Rocket{
-				PitchDegree:      ChildPitch,
-				YawDegree:        ChildYaw,
-				Fuel:             ChildFuel,
-				BurnRate:         ChildBurnRate,
-				EngineEfficiency: ChildEngineEfficiency,
-			}
-			RocketPopulation2 = append(RocketPopulation2, Child)
-		}
-	}
-	return RocketPopulation2
-}
-
-func LaunchPopulation(FirstRocket Rocket, TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize, Generations int, BodyMassPopulation float64) {
+func LaunchPopulation(FirstRocket simulation.Rocket, TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize, Generations int, BodyMassPopulation float64) {
 	Listener, errorListening := net.Listen("tcp", ":8080")
 	if errorListening != nil {
 		log.Fatalf("❌ Failed to bind TCP port 8080: %v\n", errorListening)
@@ -420,9 +38,9 @@ func LaunchPopulation(FirstRocket Rocket, TargetCoordinateX, TargetCoordinateY, 
 	Connection.Write([]byte(BothTargetPacket))
 	time.Sleep(150 * time.Millisecond)
 
-	RocketPopulation := FirstGeneticCalculation(FirstRocket, PopulationSize, BodyMassPopulation)
+	RocketPopulation := genetic.FirstGeneticCalculation(FirstRocket, PopulationSize, BodyMassPopulation)
 
-	SliceTenBestRocket, MedianPopulation := CalculationTrajectory(TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize, BodyMassPopulation, RocketPopulation)
+	SliceTenBestRocket, MedianPopulation := simulation.CalculationTrajectory(TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize, BodyMassPopulation, RocketPopulation)
 	InitialMedian := MedianPopulation
 
 	for id, rocket := range SliceTenBestRocket {
@@ -433,11 +51,11 @@ func LaunchPopulation(FirstRocket Rocket, TargetCoordinateX, TargetCoordinateY, 
 
 	time.Sleep(3000 * time.Millisecond)
 
-	RocketPopulation2 := GeneticCalculation(SliceTenBestRocket, PopulationSize, MedianPopulation, BodyMassPopulation)
+	RocketPopulation2 := genetic.GeneticCalculation(SliceTenBestRocket, PopulationSize, MedianPopulation, BodyMassPopulation)
 
 	for CountGenerations := 0; CountGenerations < Generations; CountGenerations++ {
 		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %d/%d running...\n", CountGenerations+1, Generations)
-		SliceTenBestRocket2, MedianPopulation2 := CalculationTrajectory(TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize, BodyMassPopulation, RocketPopulation2)
+		SliceTenBestRocket2, MedianPopulation2 := simulation.CalculationTrajectory(TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize, BodyMassPopulation, RocketPopulation2)
 
 		AdaptiveThreshold := math.Max(80.0, InitialMedian*0.025)
 
@@ -476,7 +94,7 @@ func LaunchPopulation(FirstRocket Rocket, TargetCoordinateX, TargetCoordinateY, 
 		}
 
 		time.Sleep(3000 * time.Millisecond)
-		RocketPopulation2 = GeneticCalculation(SliceTenBestRocket2, PopulationSize, MedianPopulation2, BodyMassPopulation)
+		RocketPopulation2 = genetic.GeneticCalculation(SliceTenBestRocket2, PopulationSize, MedianPopulation2, BodyMassPopulation)
 	}
 }
 
@@ -682,6 +300,6 @@ func main() {
 
 	CalculatedEngineEfficiency := 800.0 + (BurnRateFirstRocket/BodyMassPopulation)*1500.0
 
-	FirstRocket := Rocket{PitchDegree: PitchFirstRocket, YawDegree: YawFirstRocket, Fuel: FuelFirstRocket, BurnRate: BurnRateFirstRocket, EngineEfficiency: CalculatedEngineEfficiency}
+	FirstRocket := simulation.Rocket{PitchDegree: PitchFirstRocket, YawDegree: YawFirstRocket, Fuel: FuelFirstRocket, BurnRate: BurnRateFirstRocket, EngineEfficiency: CalculatedEngineEfficiency}
 	LaunchPopulation(FirstRocket, int(TargetCoordinateX), int(TargetCoordinateY), int(TargetCoordinateZ), int(PopulationSize), int(Generations), BodyMassPopulation)
 }
