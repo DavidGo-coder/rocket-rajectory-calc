@@ -8,151 +8,151 @@ import (
 	"sync"
 )
 
-func CalculationTrajectory(TargetCoordinateX, TargetCoordinateY, TargetCoordinateZ, PopulationSize int, BodyMassPopulation float64, RocketPopulation2 []Rocket) ([]Rocket, float64) {
+func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize int, bodyMassPopulation float64, rocketPopulation2 []Rocket) ([]Rocket, float64) {
 	var wg sync.WaitGroup
-	wg.Add(PopulationSize)
+	wg.Add(populationSize)
 
 	type ResultSimulation struct {
-		X             float64
-		Y             float64
-		TrajectoryCSV string
-		Sucess        float64
-		ResultIndex   int
+		x             float64
+		y             float64
+		trajectoryCSV string
+		sucess        float64
+		resultIndex   int
 	}
 
-	ChannelResultSimulation := make(chan ResultSimulation, PopulationSize)
+	channelResultSimulation := make(chan ResultSimulation, populationSize)
 
-	for CountPopulationSizeSimulation := 0; CountPopulationSizeSimulation < PopulationSize; CountPopulationSizeSimulation++ {
-		go func(Index int, Fuel, PitchDegree, YawDegree, BurnRate, EngineEfficiency float64) {
+	for countPopulationSizeSimulation := 0; countPopulationSizeSimulation < populationSize; countPopulationSizeSimulation++ {
+		go func(index int, fuel, pitchDegree, yawDegree, burnRate, engineEfficiency float64) {
 			defer wg.Done()
 
-			PitchRadians := PitchDegree * math.Pi / 180.0
-			Vx, Vy := 0.0, 0.0
-			X, Y := 0.0, 0.0
-			Time := 0.0
+			pitchRadians := pitchDegree * math.Pi / 180.0
+			vx, vy := 0.0, 0.0
+			x, y := 0.0, 0.0
+			time := 0.0
 			maxY := 0.0
 
-			var TrajectoryPoints []string
-			StepCounter := 0
+			var trajectoryPoints []string
+			stepCounter := 0
 
-			targetX := float64(TargetCoordinateX)
-			targetY := float64(TargetCoordinateY)
+			targetX := float64(targetCoordinateX)
+			targetY := float64(targetCoordinateY)
 
-			MinDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY)
+			minDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY)
 
-			for Time < 150.0 {
-				CurrentMass := BodyMassPopulation + Fuel
-				if CurrentMass < BodyMassPopulation {
-					CurrentMass = BodyMassPopulation
+			for time < 150.0 {
+				currentMass := bodyMassPopulation + fuel
+				if currentMass < bodyMassPopulation {
+					currentMass = bodyMassPopulation
 				}
 
-				var ThrustForceX, ThrustForceY float64
-				if Fuel > 0 {
-					DynamicThrust := BurnRate * EngineEfficiency
+				var thrustForceX, thrustForceY float64
+				if fuel > 0 {
+					dynamicThrust := burnRate * engineEfficiency
 
-					FuelConsumed := BurnRate * OneMomentSimulation
-					if FuelConsumed > Fuel {
-						DynamicThrust = (Fuel / OneMomentSimulation) * EngineEfficiency
-						Fuel = 0
+					fuelConsumed := burnRate * OneMomentSimulation
+					if fuelConsumed > fuel {
+						dynamicThrust = (fuel / OneMomentSimulation) * engineEfficiency
+						fuel = 0
 					} else {
-						Fuel -= FuelConsumed
+						fuel -= fuelConsumed
 					}
 
-					ThrustForceX = DynamicThrust * math.Cos(PitchRadians)
-					ThrustForceY = DynamicThrust * math.Sin(PitchRadians)
+					thrustForceX = dynamicThrust * math.Cos(pitchRadians)
+					thrustForceY = dynamicThrust * math.Sin(pitchRadians)
 				}
 
-				var FdragX, FdragY float64
-				V := math.Sqrt(Vx*Vx + Vy*Vy)
-				if V > 0.001 {
-					CurrentDragCoef := AirResistance * math.Exp(-Y/8500.0)
-					FdragTotal := CurrentDragCoef * V * V
+				var fdragX, fdragY float64
+				v := math.Sqrt(vx*vx + vy*vy)
+				if v > 0.001 {
+					currentDragCoef := AirResistance * math.Exp(-y/8500.0)
+					fdragTotal := currentDragCoef * v * v
 
-					FdragX = FdragTotal * (Vx / V)
-					FdragY = FdragTotal * (Vy / V)
+					fdragX = fdragTotal * (vx / v)
+					fdragY = fdragTotal * (vy / v)
 				}
 
-				CurrentGravitation := GravitationalConstant * math.Pow(RadiusPlanetEarth/(RadiusPlanetEarth+Y), 2)
+				currentGravitation := GravitationalConstant * math.Pow(RadiusPlanetEarth/(RadiusPlanetEarth+y), 2)
 
-				Ax := (ThrustForceX - FdragX) / CurrentMass
-				Ay := ((ThrustForceY - FdragY) / CurrentMass) - CurrentGravitation
+				ax := (thrustForceX - fdragX) / currentMass
+				ay := ((thrustForceY - fdragY) / currentMass) - currentGravitation
 
-				X += Vx * OneMomentSimulation
-				Y += Vy * OneMomentSimulation
-				Vx += Ax * OneMomentSimulation
-				Vy += Ay * OneMomentSimulation
+				x += vx * OneMomentSimulation
+				y += vy * OneMomentSimulation
+				vx += ax * OneMomentSimulation
+				vy += ay * OneMomentSimulation
 
-				if Y <= 0 && Vy < 0 {
-					Y = 0
-					Vx = 0
-					Vy = 0
-					if Time > 0.5 {
+				if y <= 0 && vy < 0 {
+					y = 0
+					vx = 0
+					vy = 0
+					if time > 0.5 {
 						break
 					}
 				}
 
-				if Y > maxY {
-					maxY = Y
+				if y > maxY {
+					maxY = y
 				}
 
-				Dx := targetX - X
-				Dy := targetY - Y
-				CurrentDist := math.Sqrt(Dx*Dx + Dy*Dy)
+				dx := targetX - x
+				dy := targetY - y
+				currentDist := math.Sqrt(dx*dx + dy*dy)
 
-				if CurrentDist < MinDistToTarget {
-					MinDistToTarget = CurrentDist
+				if currentDist < minDistToTarget {
+					minDistToTarget = currentDist
 				}
 
-				if StepCounter%50 == 0 {
-					TrajectoryPoints = append(TrajectoryPoints, fmt.Sprintf("%.2f,%.2f", X, Y))
+				if stepCounter%50 == 0 {
+					trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
 				}
-				StepCounter++
-				Time += OneMomentSimulation
+				stepCounter++
+				time += OneMomentSimulation
 			}
 
-			TrajectoryPoints = append(TrajectoryPoints, fmt.Sprintf("%.2f,%.2f", X, Y))
+			trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
 
-			EfficiencyRating := MinDistToTarget
+			efficiencyRating := minDistToTarget
 
-			if X < 5.0 && maxY < 5.0 {
-				EfficiencyRating += 50000.0
+			if x < 5.0 && maxY < 5.0 {
+				efficiencyRating += 50000.0
 			} else {
 
-				if MinDistToTarget < 500.0 {
-					EfficiencyRating -= Fuel * 2.0
+				if minDistToTarget < 500.0 {
+					efficiencyRating -= fuel * 2.0
 				}
 			}
 
-			ChannelResultSimulation <- ResultSimulation{
-				X:             X,
-				Y:             maxY,
-				Sucess:        EfficiencyRating,
-				TrajectoryCSV: strings.Join(TrajectoryPoints, ";"),
-				ResultIndex:   Index,
+			channelResultSimulation <- ResultSimulation{
+				x:             x,
+				y:             maxY,
+				sucess:        efficiencyRating,
+				trajectoryCSV: strings.Join(trajectoryPoints, ";"),
+				resultIndex:   index,
 			}
-		}(CountPopulationSizeSimulation, RocketPopulation2[CountPopulationSizeSimulation].Fuel, RocketPopulation2[CountPopulationSizeSimulation].PitchDegree, RocketPopulation2[CountPopulationSizeSimulation].YawDegree, RocketPopulation2[CountPopulationSizeSimulation].BurnRate, RocketPopulation2[CountPopulationSizeSimulation].EngineEfficiency)
+		}(countPopulationSizeSimulation, rocketPopulation2[countPopulationSizeSimulation].Fuel, rocketPopulation2[countPopulationSizeSimulation].PitchDegree, rocketPopulation2[countPopulationSizeSimulation].YawDegree, rocketPopulation2[countPopulationSizeSimulation].BurnRate, rocketPopulation2[countPopulationSizeSimulation].EngineEfficiency)
 	}
 	wg.Wait()
-	close(ChannelResultSimulation)
+	close(channelResultSimulation)
 
-	for Result := range ChannelResultSimulation {
-		RocketPopulation2[Result.ResultIndex].Fitness = Result.Sucess
-		RocketPopulation2[Result.ResultIndex].X = Result.X
-		RocketPopulation2[Result.ResultIndex].Y = Result.Y
-		RocketPopulation2[Result.ResultIndex].TrajectoryCSV = Result.TrajectoryCSV
+	for result := range channelResultSimulation {
+		rocketPopulation2[result.resultIndex].Fitness = result.sucess
+		rocketPopulation2[result.resultIndex].X = result.x
+		rocketPopulation2[result.resultIndex].Y = result.y
+		rocketPopulation2[result.resultIndex].TrajectoryCSV = result.trajectoryCSV
 	}
 
-	sort.Slice(RocketPopulation2[:PopulationSize], func(i, j int) bool {
-		return RocketPopulation2[i].Fitness < RocketPopulation2[j].Fitness
+	sort.Slice(rocketPopulation2[:populationSize], func(i, j int) bool {
+		return rocketPopulation2[i].Fitness < rocketPopulation2[j].Fitness
 	})
 
-	MedianPopulation := RocketPopulation2[PopulationSize/2].Fitness
-	fmt.Printf("🧬 [EVOLUTION] Processing generation... Median target miss: %.2f meters\n", MedianPopulation)
+	medianPopulation := rocketPopulation2[populationSize/2].Fitness
+	fmt.Printf("🧬 [EVOLUTION] Processing generation... Median target miss: %.2f meters\n", medianPopulation)
 
-	var SliceTenBestRocket []Rocket
-	for b := 0; b < 10 && b < PopulationSize; b++ {
-		SliceTenBestRocket = append(SliceTenBestRocket, RocketPopulation2[b])
+	var sliceTenBestRocket []Rocket
+	for b := 0; b < 10 && b < populationSize; b++ {
+		sliceTenBestRocket = append(sliceTenBestRocket, rocketPopulation2[b])
 	}
 
-	return SliceTenBestRocket, MedianPopulation
+	return sliceTenBestRocket, medianPopulation
 }

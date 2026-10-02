@@ -62,8 +62,8 @@ func FirstGeneticCalculation(firstRocket simulation.Rocket, populationSize int, 
 
 		pitchRand, yawRand, fuelRand, burnRateRand, engineEfficiencyRand = ValidationRocket(pitchRand, yawRand, fuelRand, burnRateRand, engineEfficiencyRand, rocketBudyMass)
 
-		RocketRand := simulation.Rocket{PitchDegree: pitchRand, YawDegree: yawRand, Fuel: fuelRand, BurnRate: burnRateRand, EngineEfficiency: engineEfficiencyRand}
-		rocketPopulation = append(rocketPopulation, RocketRand)
+		rocketRand := simulation.Rocket{PitchDegree: pitchRand, YawDegree: yawRand, Fuel: fuelRand, BurnRate: burnRateRand, EngineEfficiency: engineEfficiencyRand}
+		rocketPopulation = append(rocketPopulation, rocketRand)
 	}
 	return rocketPopulation
 }
@@ -81,10 +81,11 @@ func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize i
 	}
 
 	sliceTenBestSortedRocket := make([]simulation.Rocket, lenSliceBestRocket)
-	for a := 0; a < lenSliceBestRocket; a++ {
-		randInt := rand.IntN(lenSliceBestRocket)
-		sliceTenBestSortedRocket[a] = sliceTenBestRocket[randInt]
-	}
+	copy(sliceTenBestSortedRocket, sliceTenBestRocket)
+
+	rand.Shuffle(lenSliceBestRocket, func(i, j int) {
+		sliceTenBestSortedRocket[i], sliceTenBestSortedRocket[j] = sliceTenBestSortedRocket[j], sliceTenBestSortedRocket[i]
+	})
 
 	parentIndex := 0
 	for len(rocketPopulation2) < populationSize {
