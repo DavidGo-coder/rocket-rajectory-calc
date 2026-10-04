@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize int, bodyMassPopulation float64, rocketPopulation2 []Rocket) ([]Rocket, float64) {
+func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize int, rocketPopulation []Rocket) ([]Rocket, float64) {
 	var wg sync.WaitGroup
 	wg.Add(populationSize)
 
@@ -16,14 +16,14 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 		x             float64
 		y             float64
 		trajectoryCSV string
-		sucess        float64
+		score         float64
 		resultIndex   int
 	}
 
 	channelResultSimulation := make(chan ResultSimulation, populationSize)
 
-	for countPopulationSizeSimulation := 0; countPopulationSizeSimulation < populationSize; countPopulationSizeSimulation++ {
-		go func(index int, fuel, pitchDegree, yawDegree, burnRate, engineEfficiency float64) {
+	for countSimulation := 0; countSimulation < populationSize; countSimulation++ {
+		go func(index int, fuel, pitchDegree, yawDegree, burnRate, engineEfficiency, bodyMass float64) {
 			defer wg.Done()
 
 			pitchRadians := pitchDegree * math.Pi / 180.0
@@ -39,11 +39,12 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 			targetY := float64(targetCoordinateY)
 
 			minDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY)
+			currentRocket := rocketPopulation[index]
 
 			for time < 150.0 {
-				currentMass := bodyMassPopulation + fuel
-				if currentMass < bodyMassPopulation {
-					currentMass = bodyMassPopulation
+				currentMass := currentRocket.BodyMass + fuel
+				if currentMass < 0.1 {
+					currentMass = 0.1
 				}
 
 				var thrustForceX, thrustForceY float64
@@ -72,7 +73,8 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 					fdragY = fdragTotal * (vy / v)
 				}
 
-				currentGravitation := GravitationalConstant * math.Pow(RadiusPlanetEarth/(RadiusPlanetEarth+y), 2)
+				t := RadiusPlanetEarth / (RadiusPlanetEarth + y)
+				currentGravitation := GravitationalConstant * (t * t)
 
 				ax := (thrustForceX - fdragX) / currentMass
 				ay := ((thrustForceY - fdragY) / currentMass) - currentGravitation
@@ -84,9 +86,16 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 
 				if y <= 0 && vy < 0 {
 					y = 0
-					vx = 0
-					vy = 0
-					if time > 0.5 {
+
+					if time < 0.5 || thrustForceY > currentGravitation {
+						vy = 0
+
+					} else {
+
+						x -= vx * OneMomentSimulation
+						vx = 0
+						vy = 0
+
 						break
 					}
 				}
@@ -112,47 +121,45 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 
 			trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
 
-			efficiencyRating := minDistToTarget
+			efficiencyScore := minDistToTarget
 
-			if x < 5.0 && maxY < 5.0 {
-				efficiencyRating += 50000.0
+			if maxY < 5.0 {
+				efficiencyScore += FailedLaunchPenalty // potentional weak area with "magic" number
 			} else {
-
-				if minDistToTarget < 500.0 {
-					efficiencyRating -= fuel * 2.0
-				}
+				proximity := math.Exp(-minDistToTarget / 500.0) // also magic number "500.0"
+				efficiencyScore -= fuel * 2.0 * proximity
 			}
 
 			channelResultSimulation <- ResultSimulation{
 				x:             x,
 				y:             maxY,
-				sucess:        efficiencyRating,
+				score:         efficiencyScore,
 				trajectoryCSV: strings.Join(trajectoryPoints, ";"),
 				resultIndex:   index,
 			}
-		}(countPopulationSizeSimulation, rocketPopulation2[countPopulationSizeSimulation].Fuel, rocketPopulation2[countPopulationSizeSimulation].PitchDegree, rocketPopulation2[countPopulationSizeSimulation].YawDegree, rocketPopulation2[countPopulationSizeSimulation].BurnRate, rocketPopulation2[countPopulationSizeSimulation].EngineEfficiency)
+		}(countSimulation, rocketPopulation[countSimulation].Fuel, rocketPopulation[countSimulation].PitchDegree, rocketPopulation[countSimulation].YawDegree, rocketPopulation[countSimulation].BurnRate, rocketPopulation[countSimulation].EngineEfficiency, rocketPopulation[countSimulation].BodyMass)
 	}
 	wg.Wait()
 	close(channelResultSimulation)
 
 	for result := range channelResultSimulation {
-		rocketPopulation2[result.resultIndex].Fitness = result.sucess
-		rocketPopulation2[result.resultIndex].X = result.x
-		rocketPopulation2[result.resultIndex].Y = result.y
-		rocketPopulation2[result.resultIndex].TrajectoryCSV = result.trajectoryCSV
+		rocketPopulation[result.resultIndex].Fitness = result.score
+		rocketPopulation[result.resultIndex].X = result.x
+		rocketPopulation[result.resultIndex].Y = result.y
+		rocketPopulation[result.resultIndex].TrajectoryCSV = result.trajectoryCSV
 	}
 
-	sort.Slice(rocketPopulation2[:populationSize], func(i, j int) bool {
-		return rocketPopulation2[i].Fitness < rocketPopulation2[j].Fitness
+	sort.Slice(rocketPopulation[:populationSize], func(i, j int) bool {
+		return rocketPopulation[i].Fitness < rocketPopulation[j].Fitness
 	})
 
-	medianPopulation := rocketPopulation2[populationSize/2].Fitness
-	fmt.Printf("🧬 [EVOLUTION] Processing generation... Median target miss: %.2f meters\n", medianPopulation)
+	medianFitness := rocketPopulation[populationSize/2].Fitness
+	fmt.Printf("🧬 [EVOLUTION] Processing generation... Median target miss: %.2f meters\n", medianFitness)
 
 	var sliceTenBestRocket []Rocket
 	for b := 0; b < 10 && b < populationSize; b++ {
-		sliceTenBestRocket = append(sliceTenBestRocket, rocketPopulation2[b])
+		sliceTenBestRocket = append(sliceTenBestRocket, rocketPopulation[b])
 	}
 
-	return sliceTenBestRocket, medianPopulation
+	return sliceTenBestRocket, medianFitness
 }

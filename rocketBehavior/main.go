@@ -16,7 +16,7 @@ import (
 	"github.com/DavidGo-coder/rocket-trajectory-calc/simulation"
 )
 
-func LaunchPopulation(firstRocket simulation.Rocket, targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations int, bodyMassPopulation float64) {
+func LaunchPopulation(firstRocket simulation.Rocket, targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations int) {
 	listener, errorListening := net.Listen("tcp", ":8080")
 	if errorListening != nil {
 		log.Fatalf("❌ Failed to bind TCP port 8080: %v\n", errorListening)
@@ -38,9 +38,9 @@ func LaunchPopulation(firstRocket simulation.Rocket, targetCoordinateX, targetCo
 	connection.Write([]byte(bothTargetPacket))
 	time.Sleep(150 * time.Millisecond)
 
-	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize, bodyMassPopulation)
+	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize)
 
-	sliceTenBestRocket, medianPopulation := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, bodyMassPopulation, rocketPopulation)
+	sliceTenBestRocket, medianPopulation := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation)
 	initialMedian := medianPopulation
 
 	for id, rocket := range sliceTenBestRocket {
@@ -51,13 +51,13 @@ func LaunchPopulation(firstRocket simulation.Rocket, targetCoordinateX, targetCo
 
 	time.Sleep(3000 * time.Millisecond)
 
-	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianPopulation, bodyMassPopulation)
+	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianPopulation, firstRocket.BodyMass)
 
 	for countGenerations := 0; countGenerations < generations; countGenerations++ {
 		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %d/%d running...\n", countGenerations+1, generations)
-		sliceTenBestRocket2, medianPopulation2 := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, bodyMassPopulation, rocketPopulation2)
+		sliceTenBestRocket2, medianNextFitness := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation2)
 
-		adaptiveThreshold := math.Max(80.0, initialMedian*0.025)
+		adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
 
 		for id, rocket := range sliceTenBestRocket2 {
 			if rocket.TrajectoryCSV == "" {
@@ -94,7 +94,7 @@ func LaunchPopulation(firstRocket simulation.Rocket, targetCoordinateX, targetCo
 		}
 
 		time.Sleep(3000 * time.Millisecond)
-		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianPopulation2, bodyMassPopulation)
+		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianNextFitness, firstRocket.BodyMass)
 	}
 }
 
@@ -300,6 +300,6 @@ func main() {
 
 	calculatedEngineEfficiency := 800.0 + (burnRateFirstRocket/bodyMassPopulation)*1500.0
 
-	firstRocket := simulation.Rocket{PitchDegree: pitchFirstRocket, YawDegree: yawFirstRocket, Fuel: fuelFirstRocket, BurnRate: burnRateFirstRocket, EngineEfficiency: calculatedEngineEfficiency}
-	LaunchPopulation(firstRocket, int(targetCoordinateX), int(targetCoordinateY), int(targetCoordinateZ), int(populationSize), int(generations), bodyMassPopulation)
+	firstRocket := simulation.Rocket{PitchDegree: pitchFirstRocket, YawDegree: yawFirstRocket, Fuel: fuelFirstRocket, BurnRate: burnRateFirstRocket, EngineEfficiency: calculatedEngineEfficiency, BodyMass: bodyMassPopulation}
+	LaunchPopulation(firstRocket, int(targetCoordinateX), int(targetCoordinateY), int(targetCoordinateZ), int(populationSize), int(generations))
 }
