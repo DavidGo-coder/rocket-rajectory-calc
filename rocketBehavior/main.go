@@ -16,101 +16,39 @@ import (
 	"github.com/DavidGo-coder/rocket-trajectory-calc/simulation"
 )
 
-func LaunchPopulation(firstRocket simulation.Rocket, targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations int) {
-	listener, errorListening := net.Listen("tcp", ":8080")
+const (
+	AdressConnection string = "8800"
+	TimeOneGeneraion int    = 3000
+)
+
+func CreateConnectionWithPython() (connection net.Conn) {
+	listener, errorListening := net.Listen("tcp", ":"+AdressConnection)
 	if errorListening != nil {
 		log.Fatalf("❌ Failed to bind TCP port 8080: %v\n", errorListening)
 	}
 	defer listener.Close()
 
-	fmt.Println("📡 [NET SYSTEM] TCP Server started successfully on port 8080")
+	fmt.Printf("📡 [NET SYSTEM] TCP Server started successfully on port %v\n", AdressConnection)
 
 	connection, errorConection := listener.Accept()
 	if errorConection != nil {
 		log.Printf("❌ Python client handshake failed: %v", errorConection)
 		return
 	}
-	defer connection.Close()
 
 	fmt.Println("✨ [CONNECTION] Python neural-radar pipeline connected!")
 
-	bothTargetPacket := fmt.Sprintf("TARGET|%d,%d\n", targetCoordinateX, targetCoordinateY)
-	connection.Write([]byte(bothTargetPacket))
-	time.Sleep(150 * time.Millisecond)
-
-	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize)
-
-	sliceTenBestRocket, medianPopulation := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation)
-	initialMedian := medianPopulation
-
-	for id, rocket := range sliceTenBestRocket {
-		dataCSV := fmt.Sprintf("ROCKET_ID:%d;%s\n", id+1, rocket.TrajectoryCSV)
-		connection.Write([]byte(dataCSV))
-		time.Sleep(50 * time.Millisecond)
-	}
-
-	time.Sleep(3000 * time.Millisecond)
-
-	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianPopulation, firstRocket.BodyMass)
-
-	for countGenerations := 0; countGenerations < generations; countGenerations++ {
-		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %d/%d running...\n", countGenerations+1, generations)
-		sliceTenBestRocket2, medianNextFitness := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation2)
-
-		adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
-
-		for id, rocket := range sliceTenBestRocket2 {
-			if rocket.TrajectoryCSV == "" {
-				rocket.TrajectoryCSV = "0.00,0.00"
-			}
-
-			dataCSV := fmt.Sprintf("ROCKET_ID:%d;%s\n", id+1, rocket.TrajectoryCSV)
-
-			_, errorWriting2 := connection.Write([]byte(dataCSV))
-			if errorWriting2 != nil && errorWriting2 != io.EOF {
-				return
-			}
-
-			if rocket.Fitness <= adaptiveThreshold && rocket.X > 10 {
-				fmt.Println("\n==================================================")
-				fmt.Println("🎯 THE GOAL WAS ACHIEVED! WE HAVE A WINNER! 🎯")
-				fmt.Println("==================================================")
-				fmt.Printf("🚀 Best Rocket Characteristics:\n")
-				fmt.Printf("   • Pitch Angle:   %.2f degrees\n", rocket.PitchDegree)
-				fmt.Printf("   • Initial Fuel:  %.2f kg\n", rocket.Fuel)
-				fmt.Printf("   • Engine Burn:   %.2f kg/s\n", rocket.BurnRate)
-				fmt.Printf("--------------------------------------------------\n")
-				fmt.Printf("📊 Flight Performance:\n")
-				fmt.Printf("   • Final X Pos:   %.2f meters\n", rocket.X)
-				fmt.Printf("   • Max Y Pos:  %.2f meters (Max Y)\n", rocket.Y)
-				fmt.Printf("   • Target Miss:   %.2f meters\n", rocket.Fitness)
-				fmt.Println("==================================================")
-
-				fmt.Println("\n👋 [SYSTEM] Simulation successfully completed. Closing connections...")
-				time.Sleep(1 * time.Second)
-				return
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-
-		time.Sleep(3000 * time.Millisecond)
-		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianNextFitness, firstRocket.BodyMass)
-	}
+	return connection
 }
 
-func main() {
+func ReadAllInput() (targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations int, firstRocket simulation.Rocket) {
 	bufferedReader := bufio.NewReader(os.Stdin)
 
-	targetCoordinateX := 0
-	targetCoordinateY := 0
-	targetCoordinateZ := 0
 	pitchFirstRocket := 0.0
 	yawFirstRocket := 0.0
 	fuelFirstRocket := 0.0
 	burnRateFirstRocket := 0.0
 	bodyMassPopulation := 0.0
-	populationSize := 0
-	generations := 0
 
 	for {
 		fmt.Println("┌──────────────────────────────────────────────────┐")
@@ -162,7 +100,7 @@ func main() {
 			targetCoordinateZ = int(rawTargetCoordinateZ)
 			break
 		} else {
-			fmt.Printf("⚠️  [VALIDATION FAILED] Non-zero coordinate required. Got: X=%v, Y=%v, Z=%v\n", targetCoordinateX, targetCoordinateY, targetCoordinateZ)
+			fmt.Printf("⚠️  [VALIDATION FAILED] Non-zero coordinate required. Got: X=%v, Y=%v, Z=%v\n", rawTargetCoordinateX, rawTargetCoordinateY, rawTargetCoordinateZ)
 			fmt.Println("──────────────────────────────────────────────────")
 			continue
 		}
@@ -218,24 +156,24 @@ func main() {
 			continue
 		}
 
-		rawBodyMassPopulation, errorTransforming8 := strconv.ParseFloat(strings.TrimSpace(sliceConditionsFirstRocket[4]), 64)
+		rawBodyMassFirstRocket, errorTransforming8 := strconv.ParseFloat(strings.TrimSpace(sliceConditionsFirstRocket[4]), 64)
 		if errorTransforming8 != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Body mass: %v", errorTransforming8)
 			fmt.Println("──────────────────────────────────────────────────")
 			continue
 		}
 
-		if rawYawFirstRocket > 1 && rawYawFirstRocket < 89 && rawPitchFirstRocket > 1 && rawPitchFirstRocket < 89 && rawFuelFirstRocket > 0 && rawBurnRateFirstRocket > 0 && rawBodyMassPopulation > 0 {
+		if rawYawFirstRocket > 1 && rawYawFirstRocket < 89 && rawPitchFirstRocket > 1 && rawPitchFirstRocket < 89 && rawFuelFirstRocket > 0 && rawBurnRateFirstRocket > 0 && rawBodyMassFirstRocket > 0 {
 			fmt.Println("✨ [SUCCESS] Rocket parameters successfully validated.")
 			fmt.Println("──────────────────────────────────────────────────")
 			pitchFirstRocket = rawPitchFirstRocket
 			yawFirstRocket = rawYawFirstRocket
 			fuelFirstRocket = rawFuelFirstRocket
 			burnRateFirstRocket = rawBurnRateFirstRocket
-			bodyMassPopulation = rawBodyMassPopulation
+			bodyMassPopulation = rawBodyMassFirstRocket
 			break
 		} else {
-			fmt.Printf("⚠️ [VALIDATION FAILED] Out of range! Angles (%v°, %v°) must be 1-89°, other metrics (%v, %v, %v) must be positive.\n", pitchFirstRocket, yawFirstRocket, bodyMassPopulation, burnRateFirstRocket, fuelFirstRocket)
+			fmt.Printf("⚠️ [VALIDATION FAILED] Out of range! Angles (%v°, %v°) must be 1-89°, other metrics (%v, %v, %v) must be positive.\n", rawPitchFirstRocket, rawYawFirstRocket, rawBodyMassFirstRocket, rawBurnRateFirstRocket, rawFuelFirstRocket)
 			fmt.Println("──────────────────────────────────────────────────")
 			continue
 		}
@@ -284,7 +222,7 @@ func main() {
 			generations = int(rawGenerations)
 			break
 		} else {
-			fmt.Printf("⚠️ [VALIDATION FAILED] Invalid constraints! Size (%v) must be > 1, Generations (%v) must be > 0.\n", populationSize, generations)
+			fmt.Printf("⚠️ [VALIDATION FAILED] Invalid constraints! Size (%v) must be > 1, Generations (%v) must be > 0.\n", rawPopulationSize, rawGenerations)
 			fmt.Println("──────────────────────────────────────────────────")
 			continue
 		}
@@ -300,6 +238,101 @@ func main() {
 
 	calculatedEngineEfficiency := 800.0 + (burnRateFirstRocket/bodyMassPopulation)*1500.0
 
-	firstRocket := simulation.Rocket{PitchDegree: pitchFirstRocket, YawDegree: yawFirstRocket, Fuel: fuelFirstRocket, BurnRate: burnRateFirstRocket, EngineEfficiency: calculatedEngineEfficiency, BodyMass: bodyMassPopulation}
-	LaunchPopulation(firstRocket, int(targetCoordinateX), int(targetCoordinateY), int(targetCoordinateZ), int(populationSize), int(generations))
+	firstRocket = simulation.Rocket{PitchDegree: pitchFirstRocket, YawDegree: yawFirstRocket, Fuel: fuelFirstRocket, BurnRate: burnRateFirstRocket, EngineEfficiency: calculatedEngineEfficiency, BodyMass: bodyMassPopulation}
+	return targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations, firstRocket
+}
+
+func WaitSlowPython(connectionReader *bufio.Reader) {
+	currentTime := time.Now()
+	_, errorWaiting := connectionReader.ReadString('\n')
+	if errorWaiting != nil && errorWaiting != io.EOF {
+		fmt.Printf("❌ [SYNC ERROR] Python client disconnected or failed to respond!")
+		return
+	}
+	waitingTime := time.Since(currentTime)
+
+	if int(waitingTime.Milliseconds()) < TimeOneGeneraion {
+		timeSleeping := time.Duration(int64(TimeOneGeneraion)-waitingTime.Milliseconds()) * time.Millisecond
+		time.Sleep(timeSleeping)
+	}
+	fmt.Printf("✨ [SYNC] Python pipeline processed generation data successfully!")
+}
+
+func main() {
+	targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations, firstRocket := ReadAllInput()
+
+	connection := CreateConnectionWithPython()
+	defer connection.Close()
+	connectionReader := bufio.NewReader(connection)
+	fmt.Printf("🌐 [NET ENGINE] Spawning TCP Server on port %v...\n", AdressConnection)
+
+	bothTargetPacket := fmt.Sprintf("TARGET|%d,%d\n", targetCoordinateX, targetCoordinateY)
+	_, errorWriting1 := connection.Write([]byte(bothTargetPacket))
+	if errorWriting1 != nil && errorWriting1 != io.EOF {
+		log.Println("📡❌ [NET ERROR] Failed to transmit target coordinates packet.")
+	}
+	WaitSlowPython(connectionReader)
+
+	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize)
+
+	sliceTenBestRocket, medianPopulation := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation)
+	initialMedian := medianPopulation
+
+	for id, rocket := range sliceTenBestRocket {
+
+		dataCSV := fmt.Sprintf("ROCKET_ID:%d;%s\n", id+1, rocket.TrajectoryCSV)
+		_, errorWriting2 := connection.Write([]byte(dataCSV))
+
+		if errorWriting2 != nil && errorWriting2 != io.EOF {
+			log.Println("📡⚠️ [NET WARNING] Payload transmission interrupted.")
+		}
+	}
+
+	WaitSlowPython(connectionReader)
+
+	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianPopulation, firstRocket.BodyMass)
+
+	for countGenerations := 0; countGenerations < generations; countGenerations++ {
+		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %d/%d running...\n", countGenerations+1, generations)
+		sliceTenBestRocket2, medianNextFitness := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation2)
+
+		adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
+
+		for id, rocket := range sliceTenBestRocket2 {
+			if rocket.TrajectoryCSV == "" {
+				rocket.TrajectoryCSV = "0.00,0.00"
+			}
+
+			dataCSV := fmt.Sprintf("ROCKET_ID:%d;%s\n", id+1, rocket.TrajectoryCSV)
+
+			_, errorWriting3 := connection.Write([]byte(dataCSV))
+			if errorWriting3 != nil && errorWriting3 != io.EOF {
+				log.Println("📡💥 [NET CRITICAL] Core transmission failure. Aborting.")
+				return
+			}
+
+			if rocket.Fitness <= adaptiveThreshold && rocket.X > 10 {
+				fmt.Println("\n==================================================")
+				fmt.Println("🎯 THE GOAL WAS ACHIEVED! WE HAVE A WINNER! 🎯")
+				fmt.Println("==================================================")
+				fmt.Printf("🚀 Best Rocket Characteristics:\n")
+				fmt.Printf("   • Pitch Angle:   %.2f degrees\n", rocket.PitchDegree)
+				fmt.Printf("   • Initial Fuel:  %.2f kg\n", rocket.Fuel)
+				fmt.Printf("   • Engine Burn:   %.2f kg/s\n", rocket.BurnRate)
+				fmt.Printf("--------------------------------------------------\n")
+				fmt.Printf("📊 Flight Performance:\n")
+				fmt.Printf("   • Final X Pos:   %.2f meters\n", rocket.X)
+				fmt.Printf("   • Max Y Pos:  %.2f meters (Max Y)\n", rocket.Y)
+				fmt.Printf("   • Target Miss:   %.2f meters\n", rocket.Fitness)
+				fmt.Println("==================================================")
+
+				fmt.Println("\n👋 [SYSTEM] Simulation successfully completed. Closing connections...")
+				time.Sleep(1 * time.Second)
+				return
+			}
+		}
+
+		WaitSlowPython(connectionReader)
+		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianNextFitness, firstRocket.BodyMass)
+	}
 }

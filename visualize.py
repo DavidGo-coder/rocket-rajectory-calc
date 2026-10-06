@@ -17,17 +17,18 @@ COLORS = [
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
-    client.connect(("localhost", 8080))
-    client.setblocking(False)
+    client.connect(("localhost", 8800))
+    client.setblocking(True)
     print("Успешное подключение к бэкенду Go.")
 except Exception as e:
     print("Ошибка подключения:", e)
     sys.exit()
 
-buffer = ""
+# Оборачиваем сокет в файл для удобного чтения построчно через readline()
+socket_file = client.makefile('r', encoding='utf-8')
+
 running = True
 trajectories_dict = {}
-
 incoming_generation = {} 
 last_generation_swap_time = time.time()
 GENERATION_DISPLAY_DURATION = 3.0
@@ -38,6 +39,18 @@ target_phys_y = None
 pygame.font.init()
 font = pygame.font.SysFont("Courier", 16)
 
+# Первичное чтение пакета цели при запуске
+try:
+    raw_line = socket_file.readline().strip()
+    if "TARGET|" in raw_line:
+        parts = raw_line.split("|")[1]
+        x_str, y_str = parts.split(",")
+        target_phys_x = float(x_str)
+        target_phys_y = float(y_str)
+        client.sendall(b"READY\n")
+except Exception as e:
+    print("Ошибка первичного хэндшейка:", e)
+
 while running:
     screen.fill((10, 10, 15))
     current_time = time.time()
@@ -46,38 +59,19 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    while True:
-        try:
-            data = client.recv(65536).decode("utf-8")
-            if not data:
-                break
-            buffer += data
-        except socket.error:
-            break
-
-    if "\n" in buffer:
-        lines = buffer.split("\n")
-        buffer = lines[-1]
-        
-        for raw_line in lines[:-1]:
-            raw_line = raw_line.strip()
-            if not raw_line:
-                continue
-            
-            if "TARGET|" in raw_line:
-                try:
-                    parts = raw_line.split("|")[1]
-                    x_str, y_str = parts.split(",")
-                    target_phys_x = float(x_str)
-                    target_phys_y = float(y_str)
-                except Exception as e:
-                    print("Ошибка парсинга TARGET:", e)
-                continue
-            
-            if ";" not in raw_line:
-                continue
-                
+    # Читаем данные от Go, только если буфер пуст и пришло время обновлять поколение
+    if len(incoming_generation) == 0:
+        incoming_generation.clear()
+        for _ in range(10):
             try:
+                raw_line = socket_file.readline()
+                if not raw_line:
+                    break
+                raw_line = raw_line.strip()
+                
+                if ";" not in raw_line:
+                    continue
+                    
                 parts = raw_line.split(";")
                 coord_pairs = []
                 rocket_id = 0
@@ -95,24 +89,24 @@ while running:
                 
                 if len(phys_points) > 0:
                     color = COLORS[(rocket_id - 1) % len(COLORS)]
-                    
-                    if rocket_id == 1:
-                        incoming_generation.clear()
-                        last_generation_swap_time = current_time
-                        
                     incoming_generation[rocket_id] = (color, phys_points)
-                    
-                    if len(trajectories_dict) == 0:
-                        trajectories_dict = incoming_generation.copy()
             except Exception as e:
                 pass
+        
+        if len(trajectories_dict) == 0:
+            trajectories_dict = incoming_generation.copy()
 
     if current_time - last_generation_swap_time >= GENERATION_DISPLAY_DURATION:
         if len(incoming_generation) > 0:
             trajectories_dict = incoming_generation.copy()
+            incoming_generation.clear() # Освобождаем буфер для следующей итерации
             last_generation_swap_time = current_time
+            try:
+                client.sendall(b"NEXT_GEN_READY\n") # Пингуем Гошу, что готовы принять новые данные
+            except socket.error:
+                pass
 
-    all_current_points = list(trajectories_dict.values()) + list(incoming_generation.values())
+    all_current_points = list(trajectories_dict.values())
     max_phys_x = target_phys_x if (target_phys_x and target_phys_x > 0) else 1.0
     max_phys_y = target_phys_y if (target_phys_y and target_phys_y > 0) else 1.0
     
@@ -157,6 +151,7 @@ while running:
     pygame.display.flip()
     clock.tick(60)
 
+socket_file.close()
 client.close()
 pygame.quit()
-sys.exit() 
+sys.exit()
