@@ -17,22 +17,23 @@ import (
 )
 
 const (
-	AdressConnection string = "8800"
-	TimeOneGeneraion int    = 3000
+	portConnection      string = "8800"
+	timeOneGeneration   int    = 3000
+	currentMedianLength        = 5
 )
 
 func CreateConnectionWithPython() (connection net.Conn) {
-	listener, errorListening := net.Listen("tcp", ":"+AdressConnection)
+	listener, errorListening := net.Listen("tcp", ":"+portConnection)
 	if errorListening != nil {
-		log.Fatalf("❌ Failed to bind TCP port 8080: %v\n", errorListening)
+		log.Fatalf("❌ Failed to bind TCP port %v: %v\n", portConnection, errorListening)
 	}
 	defer listener.Close()
 
-	fmt.Printf("📡 [NET SYSTEM] TCP Server started successfully on port %v\n", AdressConnection)
+	fmt.Printf("📡 [NET SYSTEM] TCP Server started successfully on port %v\n", portConnection)
 
-	connection, errorConection := listener.Accept()
-	if errorConection != nil {
-		log.Printf("❌ Python client handshake failed: %v", errorConection)
+	connection, errorConnection := listener.Accept()
+	if errorConnection != nil {
+		log.Printf("❌ Python client handshake failed: %v", errorConnection)
 		return
 	}
 
@@ -238,21 +239,25 @@ func ReadAllInput() (targetCoordinateX, targetCoordinateY, targetCoordinateZ, po
 
 	calculatedEngineEfficiency := 800.0 + (burnRateFirstRocket/bodyMassPopulation)*1500.0
 
+	pitchFirstRocket, yawFirstRocket, fuelFirstRocket, burnRateFirstRocket, calculatedEngineEfficiency = genetic.ValidationRocket(pitchFirstRocket, yawFirstRocket, fuelFirstRocket, burnRateFirstRocket, calculatedEngineEfficiency, bodyMassPopulation)
+
 	firstRocket = simulation.Rocket{PitchDegree: pitchFirstRocket, YawDegree: yawFirstRocket, Fuel: fuelFirstRocket, BurnRate: burnRateFirstRocket, EngineEfficiency: calculatedEngineEfficiency, BodyMass: bodyMassPopulation}
 	return targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations, firstRocket
 }
 
 func WaitSlowPython(connectionReader *bufio.Reader) {
 	currentTime := time.Now()
+
 	_, errorWaiting := connectionReader.ReadString('\n')
-	if errorWaiting != nil && errorWaiting != io.EOF {
+	if errorWaiting != nil {
 		fmt.Printf("❌ [SYNC ERROR] Python client disconnected or failed to respond!")
 		return
 	}
+
 	waitingTime := time.Since(currentTime)
 
-	if int(waitingTime.Milliseconds()) < TimeOneGeneraion {
-		timeSleeping := time.Duration(int64(TimeOneGeneraion)-waitingTime.Milliseconds()) * time.Millisecond
+	if int(waitingTime.Milliseconds()) < timeOneGeneration {
+		timeSleeping := time.Duration(int64(timeOneGeneration)-waitingTime.Milliseconds()) * time.Millisecond
 		time.Sleep(timeSleeping)
 	}
 	fmt.Printf("✨ [SYNC] Python pipeline processed generation data successfully!")
@@ -264,14 +269,13 @@ func main() {
 	connection := CreateConnectionWithPython()
 	defer connection.Close()
 	connectionReader := bufio.NewReader(connection)
-	fmt.Printf("🌐 [NET ENGINE] Spawning TCP Server on port %v...\n", AdressConnection)
+	fmt.Printf("🌐 [NET ENGINE] Spawning TCP Server on port %v...\n", portConnection)
 
 	bothTargetPacket := fmt.Sprintf("TARGET|%d,%d\n", targetCoordinateX, targetCoordinateY)
 	_, errorWriting1 := connection.Write([]byte(bothTargetPacket))
 	if errorWriting1 != nil && errorWriting1 != io.EOF {
 		log.Println("📡❌ [NET ERROR] Failed to transmit target coordinates packet.")
 	}
-	WaitSlowPython(connectionReader)
 
 	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize)
 
@@ -290,13 +294,19 @@ func main() {
 
 	WaitSlowPython(connectionReader)
 
-	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianPopulation, firstRocket.BodyMass)
+	medianHistory := make([]float64, currentMedianLength)
+	medianHistory = append(medianHistory, initialMedian)
+
+	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianHistory, initialMedian, firstRocket.BodyMass)
+
+	adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
 
 	for countGenerations := 0; countGenerations < generations; countGenerations++ {
 		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %d/%d running...\n", countGenerations+1, generations)
+
 		sliceTenBestRocket2, medianNextFitness := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation2)
 
-		adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
+		medianHistory[(countGenerations+1)%5] = medianNextFitness
 
 		for id, rocket := range sliceTenBestRocket2 {
 			if rocket.TrajectoryCSV == "" {
@@ -311,7 +321,7 @@ func main() {
 				return
 			}
 
-			if rocket.Fitness <= adaptiveThreshold && rocket.X > 10 {
+			if rocket.Fitness <= adaptiveThreshold && rocket.Y > 5 {
 				fmt.Println("\n==================================================")
 				fmt.Println("🎯 THE GOAL WAS ACHIEVED! WE HAVE A WINNER! 🎯")
 				fmt.Println("==================================================")
@@ -333,6 +343,6 @@ func main() {
 		}
 
 		WaitSlowPython(connectionReader)
-		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianNextFitness, firstRocket.BodyMass)
+		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianHistory, medianNextFitness, firstRocket.BodyMass)
 	}
 }

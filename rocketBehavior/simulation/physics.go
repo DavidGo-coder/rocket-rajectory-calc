@@ -41,7 +41,7 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 			minDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY)
 			currentRocket := rocketPopulation[index]
 
-			for time < 150.0 {
+			for time < 275.0 {
 				currentMass := currentRocket.BodyMass + fuel
 				if currentMass < 0.1 {
 					currentMass = 0.1

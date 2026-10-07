@@ -7,18 +7,18 @@ import (
 	"github.com/DavidGo-coder/rocket-trajectory-calc/simulation"
 )
 
-func validationRocket(pitchDegree, yawDegree, fuel, burnRate, engineEfficiency, bodyMass float64) (float64, float64, float64, float64, float64) {
-	if pitchDegree < 0 {
-		pitchDegree = 0
+func ValidationRocket(pitchDegree, yawDegree, fuel, burnRate, engineEfficiency, bodyMass float64) (float64, float64, float64, float64, float64) {
+	if pitchDegree < 1 {
+		pitchDegree = 1
 	}
-	if pitchDegree > 90 {
-		pitchDegree = 90
+	if pitchDegree > 89 {
+		pitchDegree = 89
 	}
-	if yawDegree < 0 {
-		yawDegree = 0
+	if yawDegree < 1 {
+		yawDegree = 1
 	}
-	if yawDegree > 90 {
-		yawDegree = 90
+	if yawDegree > 89 {
+		yawDegree = 89
 	}
 	if fuel < 5.0 {
 		fuel = 5.0
@@ -41,7 +41,7 @@ func validationRocket(pitchDegree, yawDegree, fuel, burnRate, engineEfficiency, 
 func FirstGeneticCalculation(firstRocket simulation.Rocket, populationSize int) []simulation.Rocket {
 	initialPopulation := make([]simulation.Rocket, 0, populationSize)
 
-	firstRocket.PitchDegree, firstRocket.YawDegree, firstRocket.Fuel, firstRocket.BurnRate, firstRocket.EngineEfficiency = validationRocket(firstRocket.PitchDegree, firstRocket.YawDegree, firstRocket.Fuel, firstRocket.BurnRate, firstRocket.EngineEfficiency, firstRocket.BodyMass)
+	firstRocket.PitchDegree, firstRocket.YawDegree, firstRocket.Fuel, firstRocket.BurnRate, firstRocket.EngineEfficiency = ValidationRocket(firstRocket.PitchDegree, firstRocket.YawDegree, firstRocket.Fuel, firstRocket.BurnRate, firstRocket.EngineEfficiency, firstRocket.BodyMass)
 
 	initialPopulation = append(initialPopulation, firstRocket)
 
@@ -60,7 +60,7 @@ func FirstGeneticCalculation(firstRocket simulation.Rocket, populationSize int) 
 		burnRateRand := firstRocket.BurnRate + (((rand.Float64() * 2.0) - 1.0) * 0.5)
 		engineEfficiencyRand := firstRocket.EngineEfficiency + ((rand.Float64()*10.0 - 5.0) * 400.0)
 
-		pitchRand, yawRand, fuelRand, burnRateRand, engineEfficiencyRand = validationRocket(pitchRand, yawRand, fuelRand, burnRateRand, engineEfficiencyRand, firstRocket.BodyMass)
+		pitchRand, yawRand, fuelRand, burnRateRand, engineEfficiencyRand = ValidationRocket(pitchRand, yawRand, fuelRand, burnRateRand, engineEfficiencyRand, firstRocket.BodyMass)
 
 		rocketRand := simulation.Rocket{
 			PitchDegree:      pitchRand,
@@ -75,7 +75,7 @@ func FirstGeneticCalculation(firstRocket simulation.Rocket, populationSize int) 
 	return initialPopulation
 }
 
-func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize int, medianFitness, bodyMass float64) []simulation.Rocket {
+func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize int, medianHistory []float64, currentMedianFitness float64, bodyMass float64) []simulation.Rocket {
 	nextRocketPopulation := make([]simulation.Rocket, 0, populationSize)
 
 	length := len(sliceTenBestRocket)
@@ -109,11 +109,11 @@ func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize i
 
 			boostedPitch := (firstParent.PitchDegree*boostedPitchRand + secondParent.PitchDegree*(1.0-boostedPitchRand)) + (((rand.Float64() * 2.0) - 1.0) * 5.0)
 			boostedYaw := (firstParent.YawDegree*boostedYawRand + secondParent.YawDegree*(1.0-boostedYawRand)) + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-			boostedFuel := (firstParent.Fuel*boostedFuelRand+secondParent.Fuel*(1.0-boostedFuelRand))*(medianFitness/500+1.0) + rand.Float64()*4.0 - 2.0
-			boostedBurnRate := math.Max(0.5, (firstParent.BurnRate*boostedBurnRateRand+secondParent.BurnRate*(1.0-boostedBurnRateRand))*(medianFitness/500+1.0)+rand.Float64()*0.4-0.2)
-			boostedEngineEfficiency := (firstParent.EngineEfficiency*boostedEngineEfficiencyRand+secondParent.EngineEfficiency*(1.0-boostedEngineEfficiencyRand))*(medianFitness/500+1.0) + rand.Float64()*10.0 - 5.0
+			boostedFuel := (firstParent.Fuel*boostedFuelRand+secondParent.Fuel*(1.0-boostedFuelRand))*(currentMedianFitness/500+1.0) + rand.Float64()*4.0 - 2.0
+			boostedBurnRate := math.Max(0.5, (firstParent.BurnRate*boostedBurnRateRand+secondParent.BurnRate*(1.0-boostedBurnRateRand))*(currentMedianFitness/500+1.0)+rand.Float64()*0.4-0.2)
+			boostedEngineEfficiency := (firstParent.EngineEfficiency*boostedEngineEfficiencyRand+secondParent.EngineEfficiency*(1.0-boostedEngineEfficiencyRand))*(currentMedianFitness/500+1.0) + rand.Float64()*10.0 - 5.0
 
-			boostedPitch, boostedYaw, boostedFuel, boostedBurnRate, boostedEngineEfficiency = validationRocket(boostedPitch, boostedYaw, boostedFuel, boostedBurnRate, boostedEngineEfficiency, bodyMass)
+			boostedPitch, boostedYaw, boostedFuel, boostedBurnRate, boostedEngineEfficiency = ValidationRocket(boostedPitch, boostedYaw, boostedFuel, boostedBurnRate, boostedEngineEfficiency, bodyMass)
 
 			boostedChild := simulation.Rocket{
 				PitchDegree:      boostedPitch,
@@ -130,6 +130,33 @@ func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize i
 			}
 		}
 
+		if rand.Float64()*100 < 5 {
+			mutatedChildPitchRand := rand.Float64()
+			mutatedChildYawRand := rand.Float64()
+			mutatedChildFuelRand := rand.Float64()
+			mutatedChildBurnRateRand := rand.Float64()
+			mutatedChildEngineEfficiencyRand := rand.Float64()
+
+			mutatedChildPitch := (firstParent.PitchDegree*mutatedChildPitchRand + secondParent.PitchDegree*(1.0-mutatedChildPitchRand)) + rand.Float64()*60.0 - 30.0
+			mutatedChildYaw := (firstParent.YawDegree*mutatedChildYawRand + secondParent.YawDegree*(1.0-mutatedChildYawRand)) + rand.Float64()*60.0 - 30.0
+			mutatedChildFuel := (firstParent.Fuel*mutatedChildFuelRand + secondParent.Fuel*(1.0-mutatedChildFuelRand)) + rand.Float64()*40.0 - 20.0
+			mutatedChildBurnRate := math.Max(0.5, (firstParent.BurnRate*mutatedChildBurnRateRand+secondParent.BurnRate*(1.0-mutatedChildBurnRateRand))+rand.Float64()*4-2)
+			mutatedChildEngineEfficiency := (firstParent.EngineEfficiency*mutatedChildEngineEfficiencyRand + secondParent.EngineEfficiency*(1.0-mutatedChildEngineEfficiencyRand)) + rand.Float64()*100.0 - 50.0
+
+			mutatedChildPitch, mutatedChildYaw, mutatedChildFuel, mutatedChildBurnRate, mutatedChildEngineEfficiency = ValidationRocket(mutatedChildPitch, mutatedChildYaw, mutatedChildFuel, mutatedChildBurnRate, mutatedChildEngineEfficiency, bodyMass)
+
+			mutatedChild := simulation.Rocket{
+				PitchDegree:      mutatedChildPitch,
+				YawDegree:        mutatedChildYaw,
+				Fuel:             mutatedChildFuel,
+				BurnRate:         mutatedChildBurnRate,
+				EngineEfficiency: mutatedChildEngineEfficiency,
+				BodyMass:         bodyMass,
+			}
+			nextRocketPopulation = append(nextRocketPopulation, mutatedChild)
+
+			continue
+		}
 		childPitchRand := rand.Float64()
 		childYawRand := rand.Float64()
 		childFuelRand := rand.Float64()
@@ -142,7 +169,7 @@ func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize i
 		childBurnRate := math.Max(0.5, (firstParent.BurnRate*childBurnRateRand+secondParent.BurnRate*(1.0-childBurnRateRand))+rand.Float64()*0.4-0.2)
 		childEngineEfficiency := (firstParent.EngineEfficiency*childEngineEfficiencyRand + secondParent.EngineEfficiency*(1.0-childEngineEfficiencyRand)) + rand.Float64()*10.0 - 5.0
 
-		childPitch, childYaw, childFuel, childBurnRate, childEngineEfficiency = validationRocket(childPitch, childYaw, childFuel, childBurnRate, childEngineEfficiency, bodyMass)
+		childPitch, childYaw, childFuel, childBurnRate, childEngineEfficiency = ValidationRocket(childPitch, childYaw, childFuel, childBurnRate, childEngineEfficiency, bodyMass)
 
 		child := simulation.Rocket{
 			PitchDegree:      childPitch,
