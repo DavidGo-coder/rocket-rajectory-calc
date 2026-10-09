@@ -1,14 +1,3 @@
-       [ CLI UI Setup ] ──> Input: Target Coordinates & Seed DNA
-              │
-              ▼
-   ┌──────────────────────┐
-   │ Go Simulation Engine │ 🚀 (Euler-Cromer Physics Integration)
-   └──────────┬───────────┘
-              │  [TCP Payload: CSV Trajectories]
-              ▼  (Port 8800)
-   ┌──────────────────────┐
-   │ Python Telemetry UI  │ 📡 (Neural-Radar Visualizer Canvas)
-   └──────────────────────┘
 # 🚀 Rocket Trajectory Genetic Optimization Engine
 
 A high-performance, concurrent **Go-based evolutionary simulation engine** designed to optimize rocket launch DNA parameters. The ecosystem couples an **Euler-Cromer physics engine** with a **Genetic Algorithm (GA)**, streaming real-time flight trajectories over a synchronized **TCP bridge** to a Python-based visual telemetry canvas (`radar.py`).
