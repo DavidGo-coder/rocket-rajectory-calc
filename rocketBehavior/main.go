@@ -239,7 +239,9 @@ func ReadAllInput() (targetCoordinateX, targetCoordinateY, targetCoordinateZ, po
 
 	calculatedEngineEfficiency := 800.0 + (burnRateFirstRocket/bodyMassPopulation)*1500.0
 
-	pitchFirstRocket, yawFirstRocket, fuelFirstRocket, burnRateFirstRocket, calculatedEngineEfficiency = genetic.ValidationRocket(pitchFirstRocket, yawFirstRocket, fuelFirstRocket, burnRateFirstRocket, calculatedEngineEfficiency, bodyMassPopulation)
+	distance := math.Sqrt(math.Pow(float64(targetCoordinateX), 2) + math.Pow(float64(targetCoordinateY), 2))
+
+	pitchFirstRocket, yawFirstRocket, fuelFirstRocket, burnRateFirstRocket, calculatedEngineEfficiency = genetic.ValidationRocket(pitchFirstRocket, yawFirstRocket, fuelFirstRocket, burnRateFirstRocket, calculatedEngineEfficiency, bodyMassPopulation, distance)
 
 	firstRocket = simulation.Rocket{PitchDegree: pitchFirstRocket, YawDegree: yawFirstRocket, Fuel: fuelFirstRocket, BurnRate: burnRateFirstRocket, EngineEfficiency: calculatedEngineEfficiency, BodyMass: bodyMassPopulation}
 	return targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, generations, firstRocket
@@ -277,7 +279,11 @@ func main() {
 		log.Println("📡❌ [NET ERROR] Failed to transmit target coordinates packet.")
 	}
 
-	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize)
+	//targetDistance := math.Sqrt(math.Pow(float64(targetCoordinateX), 2) + math.Pow(float64(targetCoordinateY), 2) + math.Pow(float64(targetCoordinateZ), 2))
+	targetDistance := math.Sqrt(math.Pow(float64(targetCoordinateX), 2) + math.Pow(float64(targetCoordinateY), 2))
+	maximumBurnRate := 20.0 + (targetDistance / 50.0)
+
+	rocketPopulation := genetic.FirstGeneticCalculation(firstRocket, populationSize, maximumBurnRate)
 
 	sliceTenBestRocket, medianPopulation := simulation.CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinateZ, populationSize, rocketPopulation)
 	initialMedian := medianPopulation
@@ -295,9 +301,9 @@ func main() {
 	WaitSlowPython(connectionReader)
 
 	medianHistory := make([]float64, currentMedianLength)
-	medianHistory = append(medianHistory, initialMedian)
+	medianHistory[0] = initialMedian
 
-	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianHistory, initialMedian, firstRocket.BodyMass)
+	rocketPopulation2 := genetic.GeneticCalculation(sliceTenBestRocket, populationSize, medianHistory, initialMedian, firstRocket.BodyMass, maximumBurnRate, 0)
 
 	adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
 
@@ -343,6 +349,6 @@ func main() {
 		}
 
 		WaitSlowPython(connectionReader)
-		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianHistory, medianNextFitness, firstRocket.BodyMass)
+		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianHistory, medianNextFitness, firstRocket.BodyMass, maximumBurnRate, countGenerations+1)
 	}
 }
