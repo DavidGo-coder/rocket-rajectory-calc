@@ -22,28 +22,28 @@ const (
 	medianHisorySize  int    = 5
 )
 
-func readInput(bufferedReader *bufio.Reader) (result []string, err error) {
+func readInput(bufferedReader *bufio.Reader) ([]string, error) {
 	readedData, err := bufferedReader.ReadString('\n')
 	if err != nil && err != io.EOF {
-		return result, err
+		return nil, err
 	}
 	readedData = strings.TrimSpace(readedData)
-	result = strings.Split(readedData, ",")
-	return result, err
+	splitedData := strings.Split(readedData, ",")
+	return splitedData, err
 }
 
-func parseInt(slice []string, position int) (variable int, err error) {
+func parseInt(slice []string, position int) (int, error) {
 	result, err := strconv.ParseInt(strings.TrimSpace(slice[position]), 10, 64)
 	if err != nil {
-		return int(result), err
+		return 0, err
 	}
 	return int(result), err
 }
 
-func parseFloat(slice []string, position int) (variable float64, err error) {
+func parseFloat(slice []string, position int) (float64, error) {
 	result, err := strconv.ParseFloat(strings.TrimSpace(slice[position]), 64)
 	if err != nil {
-		return result, err
+		return 0.0, err
 	}
 	return result, err
 }
@@ -265,36 +265,35 @@ func ReadAllInput() (targetX, targetY, targetZ int, rocket simulation.Rocket, po
 	fmt.Println(strings.Repeat("=", 50))
 	fmt.Println("🚀 INITIALIZING GENETIC SIMULATION ENGINE... 🚀")
 	fmt.Println(strings.Repeat("=", 50))
-	fmt.Printf("🎯 Target Lock:     X=%d, Y=%d, Z=%d\n", targetX, targetY, targetZ)
-	fmt.Printf("👥 Population:    %d specimens | %d generations\n", populationSize, generations)
+	fmt.Printf("🎯 Target Lock:     X=%v, Y=%v, Z=%v\n", targetX, targetY, targetZ)
+	fmt.Printf("👥 Population:    %v specimens | %v generations\n", populationSize, generations)
 	fmt.Printf("🧬 First DNA: Pitch=%.2f°, Yaw=%.2f°, Fuel=%.2f kg, Mass=%.2f kg, Burn=%.2f kg/s, Eff=%.2f\n", firstRocket.PitchDegree, firstRocket.YawDegree, firstRocket.Fuel, firstRocket.BodyMass, firstRocket.BurnRate, firstRocket.EngineEfficiency)
 	fmt.Println(strings.Repeat("=", 50))
 
-	err = nil
-	return targetX, targetY, targetZ, firstRocket, populationSize, generations, err
+	return targetX, targetY, targetZ, firstRocket, populationSize, generations, nil
 }
 
-func WaitSlowPython(connectionReader *bufio.Reader) (err error) {
+func WaitSlowPython(connectionReader *bufio.Reader) error {
 	currentTime := time.Now()
 
-	_, err = connectionReader.ReadString('\n')
+	_, err := connectionReader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		fmt.Printf("❌ [SYNC ERROR] Python client disconnected or failed to respond!\n")
 		return err
 	}
 
 	if time.Since(currentTime) < timeOneGeneration {
-		timeSleeping := time.Duration(int64(timeOneGeneration)-time.Since(currentTime).Milliseconds()) * time.Millisecond
-		time.Sleep(timeSleeping)
+		timeSpent := time.Since(currentTime)
+		time.Sleep(timeOneGeneration - timeSpent)
 	}
 	fmt.Printf("✨ [SYNC] Python pipeline processed generation data successfully!")
 	return err
 }
 
-func AcceptPython() (listener net.Listener, err error) {
-	listener, err = net.Listen("tcp", ":"+portConnection)
+func AcceptPython() (net.Listener, error) {
+	listener, err := net.Listen("tcp", ":"+portConnection)
 	if err != nil {
-		log.Fatalf("❌ Failed to bind TCP port %v: %v\n", portConnection, err)
+		return listener, err
 	}
 
 	fmt.Printf("📡 [NET SYSTEM] TCP Server started successfully on port %v\n", portConnection)
@@ -326,8 +325,7 @@ func main() {
 	connectionReader := bufio.NewReader(connection)
 	fmt.Printf("🌐 [NET ENGINE] Spawning TCP Server on port %v...\n", portConnection)
 
-	bothTargetPacket := fmt.Sprintf("TARGET|%d,%d\n", targetX, targetY)
-	_, err = connection.Write([]byte(bothTargetPacket))
+	_, err = fmt.Fprintf(connection, "TARGET|%v,%v\n", targetX, targetY)
 	if err != nil {
 		log.Println("📡❌ [NET ERROR] Failed to transmit target coordinates packet.")
 	}
@@ -342,18 +340,21 @@ func main() {
 	initialMedian := medianPopulation
 
 	for id, rocket := range sliceTenBestRocket {
+		if rocket.TrajectoryCSV == "" {
+			rocket.TrajectoryCSV = "0.00,0.00"
+		}
 
-		dataCSV := fmt.Sprintf("ROCKET_ID:%d;%s\n", id+1, rocket.TrajectoryCSV)
-		_, err := connection.Write([]byte(dataCSV))
-
+		_, err := fmt.Fprintf(connection, "ROCKET_ID:%v;%v\n", id+1, rocket.TrajectoryCSV)
 		if err != nil {
 			log.Println("📡⚠️ [NET WARNING] Payload transmission interrupted.")
+			return
 		}
 	}
 
 	err = WaitSlowPython(connectionReader)
 	if err != nil {
 		fmt.Printf("❌ [SYNC ERROR] Python client disconnected or failed to respond!\n")
+		return
 	}
 
 	medianHistory := make([]float64, medianHisorySize)
@@ -364,7 +365,7 @@ func main() {
 	adaptiveThreshold := math.Max(80.0, initialMedian*0.005)
 
 	for countGenerations := 0; countGenerations < generations; countGenerations++ {
-		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %d/%d running...\n", countGenerations+1, generations)
+		fmt.Printf("⏳ [EVOLUTION] Simulation of generation %v/%v running...\n", countGenerations+1, generations)
 
 		sliceTenBestRocket2, medianNextFitness := simulation.CalculationTrajectory(targetX, targetY, targetZ, populationSize, rocketPopulation2)
 
@@ -375,9 +376,7 @@ func main() {
 				rocket.TrajectoryCSV = "0.00,0.00"
 			}
 
-			dataCSV := fmt.Sprintf("ROCKET_ID:%d;%s\n", id+1, rocket.TrajectoryCSV)
-
-			_, err := connection.Write([]byte(dataCSV))
+			_, err = fmt.Fprintf(connection, "ROCKET_ID:%v;%v\n", id+1, rocket.TrajectoryCSV)
 			if err != nil {
 				fmt.Println("📡💥 [NET CRITICAL] Core transmission failure. Aborting.")
 				return
@@ -404,7 +403,11 @@ func main() {
 			}
 		}
 
-		WaitSlowPython(connectionReader)
+		err = WaitSlowPython(connectionReader)
+		if err != nil {
+			fmt.Printf("❌ [SYNC ERROR] Python client disconnected or failed to respond!\n")
+			return
+		}
 		rocketPopulation2 = genetic.GeneticCalculation(sliceTenBestRocket2, populationSize, medianHistory, medianNextFitness, firstRocket.BodyMass, maximumBurnRate, countGenerations+1)
 	}
 }
