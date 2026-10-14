@@ -13,7 +13,6 @@ type Rocket struct {
 }
 
 const (
-	ThrustForce           = 1500.0
 	OneMomentSimulation   = 0.01
 	GravitationalConstant = 9.81
 	RadiusPlanetEarth     = 6371000.0

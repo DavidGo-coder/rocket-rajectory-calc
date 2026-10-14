@@ -96,6 +96,8 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 						vx = 0
 						vy = 0
 
+						trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
+
 						break
 					}
 				}
@@ -118,8 +120,6 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 				stepCounter++
 				time += OneMomentSimulation
 			}
-
-			trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
 
 			efficiencyScore := minDistToTarget
 

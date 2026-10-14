@@ -49,11 +49,11 @@ func FirstGeneticCalculation(firstRocket simulation.Rocket, populationSize int, 
 	initialPopulation = append(initialPopulation, firstRocket)
 
 	if populationSize > 5 {
-		initialPopulation = append(initialPopulation, simulation.Rocket{PitchDegree: 45.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000})
+		initialPopulation = append(initialPopulation, simulation.Rocket{PitchDegree: 45.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
 
-		initialPopulation = append(initialPopulation, simulation.Rocket{PitchDegree: 35.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: 8.0, EngineEfficiency: 2000})
+		initialPopulation = append(initialPopulation, simulation.Rocket{PitchDegree: 35.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: 8.0, EngineEfficiency: 2000.0})
 
-		initialPopulation = append(initialPopulation, simulation.Rocket{PitchDegree: 65.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000})
+		initialPopulation = append(initialPopulation, simulation.Rocket{PitchDegree: 65.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
 	}
 
 	for i := len(initialPopulation); i < populationSize; i++ {
@@ -124,7 +124,6 @@ func createEmergencyChild(bodyMass, maximumBurnRate float64) simulation.Rocket {
 }
 
 func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize int, medianHistory []float64, currentMedianFitness, bodyMass, maximumBurnRate float64, countGenerations int) []simulation.Rocket {
-	//nextRocketPopulation := make([]simulation.Rocket, 0, populationSize)
 
 	length := len(sliceTenBestRocket)
 	if length == 0 {
@@ -133,10 +132,6 @@ func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize i
 
 	nextRocketPopulation := make([]simulation.Rocket, length, populationSize)
 	copy(nextRocketPopulation, sliceTenBestRocket)
-
-	//for i := 0; i < length && len(nextRocketPopulation) < populationSize; i++ {
-	//	nextRocketPopulation = append(nextRocketPopulation, sliceTenBestRocket[i])
-	//}
 
 	sliceTenBestShuffledRocket := make([]simulation.Rocket, length)
 	copy(sliceTenBestShuffledRocket, sliceTenBestRocket)
@@ -183,11 +178,16 @@ func GeneticCalculation(sliceTenBestRocket []simulation.Rocket, populationSize i
 			if len(nextRocketPopulation) == populationSize {
 				break
 			}
+
+			continue
 		}
 
 		if rand.IntN(100) < 5 {
 			mutatedChild := createChild(firstParent, secondParent, bodyMass, maximumBurnRate, 1, 10)
 			nextRocketPopulation = append(nextRocketPopulation, mutatedChild)
+			if len(nextRocketPopulation) == populationSize {
+				break
+			}
 
 			continue
 		}

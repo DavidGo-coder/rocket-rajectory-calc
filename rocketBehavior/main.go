@@ -27,8 +27,10 @@ func readInput(bufferedReader *bufio.Reader) ([]string, error) {
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	readedData = strings.TrimSpace(readedData)
 	splitedData := strings.Split(readedData, ",")
+	if err == io.EOF {
+		err = nil
+	}
 	return splitedData, err
 }
 
@@ -48,11 +50,15 @@ func parseFloat(slice []string, position int) (float64, error) {
 	return result, err
 }
 
+func verticalBar(start, symbol, finish string) {
+	fmt.Println(start + strings.Repeat(symbol, 50) + finish)
+}
+
 func readTarget(bufferedReader *bufio.Reader) (targetX, targetY, targetZ int, err error) {
 	for {
-		fmt.Println("\n" + "┌" + strings.Repeat("─", 50) + "┐")
+		verticalBar("\n┌", "─", "┐")
 		fmt.Println("│ 🎯 TARGET COORDINATES SPECIFICATION              │")
-		fmt.Println("└" + strings.Repeat("─", 50) + "┘")
+		verticalBar("└", "─", "┘")
 		fmt.Println(" Enter position in meters using format: X, Y, Z")
 		fmt.Print(" ❯ ")
 
@@ -64,34 +70,34 @@ func readTarget(bufferedReader *bufio.Reader) (targetX, targetY, targetZ int, er
 
 		if len(threeTarget) != 3 {
 			fmt.Println("❌ [INPUT ERROR] Invalid format! Please enter exactly 3 coordinates (X,Y,Z).")
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawX, err := parseInt(threeTarget, 0)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse X: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawY, err := parseInt(threeTarget, 1)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Y: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawZ, err := parseInt(threeTarget, 2)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Z: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		if (rawX > 0 && rawY >= 0 && rawZ >= 0) || (rawX >= 0 && rawY >= 0 && rawZ > 0) {
 			fmt.Println("✨ [SUCCESS] Target coordinates successfully validated.")
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			targetX = rawX
 			targetY = rawY
 			targetZ = rawZ
@@ -100,7 +106,7 @@ func readTarget(bufferedReader *bufio.Reader) (targetX, targetY, targetZ int, er
 			fmt.Printf("⚠️  [VALIDATION FAILED] At least X or Z must be positive.\n"+
 				"    Y cannot be the only active axis.\n"+
 				"    Got: X=%v, Y=%v, Z=%v\n", rawX, rawY, rawZ)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 	}
@@ -113,9 +119,9 @@ func readFirstRocket(bufferedReader *bufio.Reader, x, y int) (rocket simulation.
 	pitch, yaw, fuel, burnRate, bodyMass := 0.0, 0.0, 0.0, 0.0, 0.0
 
 	for {
-		fmt.Println("\n" + "┌" + strings.Repeat("─", 50) + "┐")
+		verticalBar("\n┌", "─", "┐")
 		fmt.Println("│ 🚀 INITIAL ROCKET CONFIGURATION (CORE DNA)       │")
-		fmt.Println("└" + strings.Repeat("─", 50) + "┘")
+		verticalBar("└", "─", "┘")
 		fmt.Println(" Enter 5 metrics separated by commas:")
 		fmt.Println(" Pitch(deg), Yaw(deg), Fuel(kg), BurnRate(kg/s), BodyMass(kg)")
 		fmt.Print(" ❯ ")
@@ -128,48 +134,48 @@ func readFirstRocket(bufferedReader *bufio.Reader, x, y int) (rocket simulation.
 
 		if len(bothParameters) != 5 {
 			fmt.Println("❌ [INPUT ERROR] Invalid format! Please enter exactly 5 parameters.")
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawPitchFirstRocket, err := parseFloat(bothParameters, 0)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Pitch: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawYawFirstRocket, err := parseFloat(bothParameters, 1)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Yaw: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawFuelFirstRocket, err := parseFloat(bothParameters, 2)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Fuel mass: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawBurnRateFirstRocket, err := parseFloat(bothParameters, 3)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Burn rate: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawBodyMassFirstRocket, err := parseFloat(bothParameters, 4)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Body mass: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		if rawYawFirstRocket >= 1 && rawYawFirstRocket <= 89 && rawPitchFirstRocket >= 1 && rawPitchFirstRocket <= 89 && rawFuelFirstRocket > 0 && rawBurnRateFirstRocket > 0 && rawBodyMassFirstRocket > 0 {
 			fmt.Println("✨ [SUCCESS] Rocket parameters successfully validated.")
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			pitch = rawPitchFirstRocket
 			yaw = rawYawFirstRocket
 			fuel = rawFuelFirstRocket
@@ -178,7 +184,7 @@ func readFirstRocket(bufferedReader *bufio.Reader, x, y int) (rocket simulation.
 			break
 		} else {
 			fmt.Printf("⚠️ [VALIDATION FAILED] Out of range! Angles (%v°, %v°) must be 1-89°, other metrics (%v, %v, %v) must be positive.\n", rawPitchFirstRocket, rawYawFirstRocket, rawBodyMassFirstRocket, rawBurnRateFirstRocket, rawFuelFirstRocket)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 	}
@@ -186,8 +192,9 @@ func readFirstRocket(bufferedReader *bufio.Reader, x, y int) (rocket simulation.
 	calculatedEngineEfficiency := 800.0 + (burnRate/bodyMass)*1500.0
 
 	distance := math.Hypot(float64(x), float64(y))
+	maximumBurnRate := 20.0 + (distance / 50.0)
 
-	pitch, yaw, fuel, burnRate, calculatedEngineEfficiency = genetic.ValidationRocket(pitch, yaw, fuel, burnRate, calculatedEngineEfficiency, bodyMass, distance)
+	pitch, yaw, fuel, burnRate, calculatedEngineEfficiency = genetic.ValidationRocket(pitch, yaw, fuel, burnRate, calculatedEngineEfficiency, bodyMass, maximumBurnRate)
 
 	rocket = simulation.Rocket{PitchDegree: pitch, YawDegree: yaw, Fuel: fuel, BurnRate: burnRate, EngineEfficiency: calculatedEngineEfficiency, BodyMass: bodyMass}
 
@@ -196,9 +203,9 @@ func readFirstRocket(bufferedReader *bufio.Reader, x, y int) (rocket simulation.
 
 func readPopulationParameters(bufferedReader *bufio.Reader) (generations, populationSize int, err error) {
 	for {
-		fmt.Println("\n" + "┌" + strings.Repeat("─", 50) + "┐")
+		verticalBar("\n┌", "─", "┐")
 		fmt.Println("│ 👥 EVOLUTIONARY POPULATION CONSTRAINTS           │")
-		fmt.Println("└" + strings.Repeat("─", 50) + "┘")
+		verticalBar("└", "─", "┘")
 		fmt.Println(" Enter parameters separated by commas:")
 		fmt.Println(" PopulationSize (min: 2), TotalGenerations")
 		fmt.Print(" ❯ ")
@@ -211,33 +218,33 @@ func readPopulationParameters(bufferedReader *bufio.Reader) (generations, popula
 
 		if len(bothConditions) != 2 {
 			fmt.Println("❌ [INPUT ERROR] Invalid format! Please enter exactly 2 parameters.")
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawPopSize, err := parseInt(bothConditions, 0)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Population size: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		rawGenerations, err := parseInt(bothConditions, 1)
 		if err != nil {
 			log.Printf("❌ [PARSING ERROR] Failed to parse Total generations: %v", err)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 
 		if rawPopSize > 1 && rawGenerations > 0 {
 			fmt.Println("✨ [SUCCESS] Evolution parameters successfully validated.")
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			populationSize = rawPopSize
 			generations = rawGenerations
 			break
 		} else {
 			fmt.Printf("⚠️ [VALIDATION FAILED] Invalid constraints! Size (%v) must be > 1, Generations (%v) must be > 0.\n", rawPopSize, rawGenerations)
-			fmt.Println(strings.Repeat("─", 50))
+			verticalBar("", "─", "")
 			continue
 		}
 	}
@@ -262,13 +269,13 @@ func ReadAllInput() (targetX, targetY, targetZ int, rocket simulation.Rocket, po
 		return targetX, targetY, targetZ, rocket, populationSize, generation, err
 	}
 
-	fmt.Println(strings.Repeat("=", 50))
+	verticalBar("", "=", "")
 	fmt.Println("🚀 INITIALIZING GENETIC SIMULATION ENGINE... 🚀")
-	fmt.Println(strings.Repeat("=", 50))
+	verticalBar("", "=", "")
 	fmt.Printf("🎯 Target Lock:     X=%v, Y=%v, Z=%v\n", targetX, targetY, targetZ)
 	fmt.Printf("👥 Population:    %v specimens | %v generations\n", populationSize, generations)
 	fmt.Printf("🧬 First DNA: Pitch=%.2f°, Yaw=%.2f°, Fuel=%.2f kg, Mass=%.2f kg, Burn=%.2f kg/s, Eff=%.2f\n", firstRocket.PitchDegree, firstRocket.YawDegree, firstRocket.Fuel, firstRocket.BodyMass, firstRocket.BurnRate, firstRocket.EngineEfficiency)
-	fmt.Println(strings.Repeat("=", 50))
+	verticalBar("", "=", "")
 
 	return targetX, targetY, targetZ, firstRocket, populationSize, generations, nil
 }
@@ -328,6 +335,7 @@ func main() {
 	_, err = fmt.Fprintf(connection, "TARGET|%v,%v\n", targetX, targetY)
 	if err != nil {
 		log.Println("📡❌ [NET ERROR] Failed to transmit target coordinates packet.")
+		return
 	}
 
 	//targetDistance := math.Sqrt(math.Pow(float64(targetCoordinateX), 2) + math.Pow(float64(targetCoordinateY), 2) + math.Pow(float64(targetCoordinateZ), 2))
