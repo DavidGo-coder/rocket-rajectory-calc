@@ -1,99 +1,102 @@
-# 🚀 Rocket Trajectory Genetic Optimization Engine
+# 🚀 Rocket Trajectory Distributed Genetic Optimization Cluster (v1.5.0)
 
-A high-performance, concurrent **Go-based evolutionary simulation engine** designed to optimize rocket launch DNA parameters. The ecosystem couples an **Euler-Cromer physics engine** with a **Genetic Algorithm (GA)**, streaming real-time flight trajectories over a synchronized **TCP bridge** to a Python-based visual telemetry canvas (`radar.py`).
-
----
-
-## 📈 Project Status & Release Roadmap
-
-- [x] **v1.0.0 — Monolithic Prototype**
-  - [x] High-fidelity physical simulation engine in Go (gravity gradients & aerodynamic drag).
-  - [x] Evolutionary Genetic Algorithm (GA) with 5-gene chromosome DNA.
-  - [x] Real-time TCP network bridge linking Go & Python pipelines.
-- [x] **v1.1.0 — Architecture Optimization & Bugfixes**
-  - [x] **Modular Monolith:** Separated core concerns by splitting the single file into isolated packages (`simulation`, `genetic`).
-  - [x] **Population Guardrails:** Patched critical out-of-range panics and corrected initial mutation cycle overrides.
-- [x] **v1.2.0 — Pipeline Synchronization & Core Stability (Current)**
-  - [x] **Deterministic Frame Sync:** Enhanced the runtime orchestrator (`main.go`) with a strict 3000ms minimum window constraint per generation (`WaitSlowPython`), preventing Python telemetry UI frame drops.
-  - [x] **Adaptive Convergence Thresholds:** Integrated dynamic stop-conditions based on historical generation performance.
-  - [x] **Advanced Code Decoupling:** Re-architected entry points to cleanly interface with mathematical validation layers.
-- [ ] **v2.0.0 — Full 3D Spatial Vector Dynamics (Target: ~2027)**
-  - [ ] Refactoring the core simulation from 2D vector space to full 3D coordinate system processing.
-  - [ ] Activating the compiled `YawDegree` gene inside active multi-threaded physics matrices.
-  - [ ] Introducing dynamic crosswind vectors and true Coriolis effect calculations.
+A high-performance, concurrent **distributed evolutionary simulation complex** designed to optimize rocket launch parameters. The ecosystem has been completely re-engineered from a monolithic design into a **mesh of 5 independent nodes (microservices)** communicating over serialized real-time TCP sockets.
 
 ---
 
-## 🏗️ Architectural Layout
+## 🏗️ Distributed Cluster Topology
 
-The repository enforces the **Single Responsibility Principle** to guarantee clean isolation between data models, visualization layers, and optimization routines:
+The system enforces strict separation of concerns via a decentralized layout. Every component operates as an isolated network node, linking to a central Master Orchestrator:
 
 ```text
-rocketBehavior/
-├── go.mod                # Core Go Module Definition
-├── main.go               # Orchestrator, CLI UI Controller & TCP Socket Server
-├── simulation/
-│   ├── models.go         # Shared Aerospace Entities (Rocket Struct & Constants)
-│   └── physics.go        # Concurrent Euler-Cromer Trajectory Engine (sync.WaitGroup)
-└── genetic/
-    └── algorithm.go      # DNA Validation, Crossover, and Mutation Mechanics
+       [ input ] (CLI Input Utility)
+           │ (Initial Session Profiles)
+           ▼
+     [   master   ] <───(TCP:8800)───> [ genetic ] (Evolutionary GA Engine)
+  (Network Orchestrator)
+           │ 
+           ├───(TCP:8800)───> [ simulation ] (Concurrent Physics Processor)
+           │
+           └───(TCP:8800)───> [ visualize.py ] (Asynchronous Pygame Radar Canvas)
 ```
 
+### 🛰️ The 5 Core Network Nodes:
+1. **`master` (Go):** The central hub and network router. Manages data transmission phases, handles frame-rate pacing (`waitSlowPython`), orchestrates socket lifecycles via LIFO `defer` execution, and gracefully terminates the session using the `FINISHWORKING` signal.
+2. **`input` (Go):** The client-facing mission profiling interface. Validates 3D target points (`X, Y, Z`), structural rocket seeds, and population constraints. It pipes this metadata payload directly into the master and disconnects immediately.
+3. **`simulation` (Go):** The parallelized heavy-computing physics node. Spawns isolated Go-routines for every individual chromosome via `sync.WaitGroup`. Integrates trajectories using Euler-Cromer equations and streams an 11-parameter telemetry chunk back to the master.
+4. **`genetic` (Go):** The evolutionary calculation server. Maintains a rolling generation score buffer to detect optimization stagnation, triggers gene crossovers/mutations, and safely boots adaptive optimization routines starting at Gen 4 (`if countGenerations >= 4`).
+5. **`visualize.py` (Python):** The asynchronous telemetry radar driven by Pygame and Rich. Configured with non-blocking reads (`client.setblocking(False)`), protected against TCP packet fragmentation via a string line-buffer, and renders the top 10 trajectories of each generation instantly.
+
 ---
 
-## 🏎️ Core Technical Mechanics
+## 🏎️ Core Telemetry & Network Protocol
 
-### 1. Aerospace Physics Simulation
-Flight profiles are integrated using **Euler-Cromer math** with a step resolution of Δ t = 0.01 seconds (`OneMomentSimulation`). The calculation pipeline accurately tracks:
-* **Mass Depletion Burn:** Fuel decreases dynamically by `BurnRate * dt`. Total thrust force combines mass flow rate with engine efficiency calculations.
-* **Atmospheric Drag Gradient:** Air resistance scales non-linearly with velocity and decays exponentially relative to altitude: 
+### 1. Flight Dynamics Simulation (Euler-Cromer Integrator)
+Flight profiles are processed utilizing a discrete time-step of Δ t = 0.01 seconds. The physics matrix tracks:
+* **Exponential Atmospheric Density Decay:** Aerodynamic drag forces drop dynamically with altitude:
   \[F_{\text{drag}} = \text{AirResistance} \cdot e^{-\frac{y}{8500}} \cdot v^2\]
-* **Gravity Gradient:** Earth's gravitational acceleration decays with altitude following Newton's inverse-square law:
+* **Newton's Inverse-Square Gravity Decay:** Earth's gravitational acceleration drops as the rocket climbs:
   \[g(y) = g_0 \cdot \left(\frac{R_E}{R_E + y}\right)^2\]
+* **Failed Launch Penalty:** Specimens failing to clear an apogee of **5.0 meters** are automatically penalized with a flat **+50,000 meter** penalty added to their final miss distance (`FailedLaunchPenalty`).
 
-> 🌐 **Note on 3D Transition State:** In v1.2.0, the UI proactively captures 3D targets (`X, Y, Z`) and genetic sequences mutate the `YawDegree` gene to establish the foundation for our upcoming spatial engine. Currently, core trajectory calculations project onto the 2D plane as the framework transitions toward full 3D physics integration.
-
-### 2. Genetic Optimization & Fitness Scaling
-The optimization engine minimizes a complex **Fitness Score** (target miss distance) using continuous multi-gene chromosomes:
-* **Launch Failure Penalties:** If a rocket fails to clear an apogee (\(Y_{\text{max}}\)) of at least **5.0 meters**, it incurs a flat **+50,000 penalty score** (`FailedLaunchPenalty`).
-* **Fuel Efficiency Incentives:** Successful flights receive a fuel retention bonus scaled by target proximity: \(\text{Score} = \text{MinDistance} - (\text{RemainingFuel} \times 2.0 \times e^{-\frac{\text{MinDistance}}{500}})\).
-* **Stagnation Recovery:** If the rolling median fitness plateaus (Δ < 0.1%) across 4 sequential generations, an **Emergency Repopulation Sweep** overrides the pool, injecting fresh high-variance seeds to escape local optima traps.
+### 2. TCP Data Layout (11-Parameter Serialization Packet)
+Data streaming between the Simulation component and the Master server utilizes a highly strict index-based mapping using the `|` delimiter:
+```text
+Index:  [0]   [1]   [2]    [3]        [4]       [5]        [6]  [7]  [8]  [9]     [10]
+Fields: Pitch|Yaw  |Fuel  |BurnRate  |BodyMass |Efficiency|XPos|YPos|ZPos|Fitness|TrajectoryCSV
+```
+*The master extracts the trailing `TrajectoryCSV` string and forwards it to the Pygame radar using the following data signature: `ROCKET_ID:id;x1,y1;x2,y2;...`.*
 
 ---
 
-## ⚙️ Core Aerospace Constants Baseline
+## ⚙️ Core Cluster Configuration Constants
 
 | Constant | Value | Description |
 | :--- | :--- | :--- |
-| `ThrustForce` | `1500.0` | Baseline hardware nominal thrust capability |
-| `OneMomentSimulation` | `0.01s` | Euler-Cromer integration time step (Δ t) |
-| `GravitationalConstant` | `9.81 m/s²` | Surface gravitational acceleration (g₀) |
-| `RadiusPlanetEarth` | `6,371,000.0m`| Mean radius of Earth (\(R_E\)) for gravity decay |
-| `AirResistance` | `0.02` | Sea-level baseline aerodynamic drag coefficient (\(C_d\)) |
-| `FailedLaunchPenalty` | `50000.0` | Fitness penalty added for rockets failing to clear 5m apogee |
+| `portConnection` | `8800` | Dedicated cluster TCP socket port handle |
+| `timeOneGeneration` | `3s` | Master synchronization pacing window for smooth GUI display |
+| `medianHistorySize` | `5` | Sliding history matrix size to analyze population stagnation |
+| `OneMomentSimulation`| `0.01s` | Euler-Cromer integration physics delta step ($\Delta t$) |
+| `FailedLaunchPenalty`| `50000.0` | Target miss penalty added for failed lift-offs |
 
 ---
 
-## 🚀 Execution & Deployment Steps
+## 🏁 Cluster Bootstrapping Sequence
 
-### 1. Initialize the Telemetry Dashboard
-Boot up your Python visualization environment to bind the socket interface and await the Go engine handshake:
-```bash
-python radar.py
-```
+To guarantee that all socket tunnels establish handshakes smoothly without throwing abrupt `io.EOF` disconnect errors, you **must** launch all 5 terminals in the exact order below.
 
-### 2. Fire Up the Evolutionary Engine
-Open a separate terminal shell, navigate to the module directory, and launch the compiler runtime:
+### Step 1: Fire up the Orchestrator
+Open your first terminal window and activate the central server routing node:
 ```bash
-cd rocketBehavior
+cd master
 go run .
 ```
-> ⚠️ **Critical Execution Note:** The trailing dot (`.`) is mandatory. It instructs the Go compiler toolchain to discover and bind the package structures of the internal directories (`simulation` and `genetic`).
 
-### 3. Interactive CLI Configuration
-Once initialized, provide your execution variables via the step-by-step terminal prompts:
-1. **Target:** Comma-separated coordinates in meters: `X, Y, Z` (e.g., `12000, 0, 10`).
-2. **Core Rocket DNA:** Initial seed variables: `Pitch(deg), Yaw(deg), Fuel(kg), BurnRate(kg/s), BodyMass(kg)`.
-3. **Constraints:** GA population layouts: `PopulationSize, TotalGenerations` (e.g., `500, 100`).
+### Step 2: Initialize the Telemetry Radar Canvas
+In a secondary shell, boot the Pygame graphics client to pass the `I|AM|VISUALIZATION` network validation phase:
+```bash
+python visualize.py
+```
 
-The simulation will stream telemetry chunks to the visual canvas and automatically exit once a specimen safely hits the **Adaptive Threshold** (\(\max(80.0, \text{InitialMedian} \times 0.005)\)).
+### Step 3: Attach the Computational Physics Engine
+In a third terminal window, launch the high-concurrency simulation service:
+```bash
+cd simulation
+go run .
+```
+
+### Step 4: Boot the Genetic Processing Node
+In a fourth shell, bring up the evolutionary operations engine:
+```bash
+cd genetic
+go run .
+```
+
+### Step 5: Execute the Mission Launch (The Trigger)
+In your final terminal window, run the CLI parsing tool. Input your target coordinates and metrics to fire up the simulation loop:
+```bash
+cd input
+go run .
+```
+
+Once parameters are defined within the `input` shell, the cluster will automatically crunch numbers for $N$ generations. Upon hitting the **Adaptive Threshold Limit** ($\max(80.0, \text{InitialMedian} \times 0.005)$), the Master gracefully distributes the `FINISHWORKING` signal, closing all terminal processes safely.

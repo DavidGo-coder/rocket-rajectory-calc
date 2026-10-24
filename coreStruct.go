@@ -1,4 +1,9 @@
-package simulation
+package core
+
+import (
+	"bufio"
+	"net"
+)
 
 type Rocket struct {
 	PitchDegree      float64
@@ -10,6 +15,12 @@ type Rocket struct {
 	Fitness          float64
 	X, Y, Z          float64
 	TrajectoryCSV    string
+}
+
+type ConnectionTools struct {
+	Conn   net.Conn
+	Reader *bufio.Reader
+	Writer *bufio.Writer
 }
 
 const (
