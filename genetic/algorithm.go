@@ -12,20 +12,20 @@ import (
 )
 
 const (
-	colorReset  = "\x1b[0m"
-	colorRed    = "\x1b[31m"
-	colorGreen  = "\x1b[32m"
-	colorYellow = "\x1b[33m"
-	colorBlue   = "\x1b[34m"
-	colorPurple = "\x1b[35m"
-	colorCyan   = "\x1b[36m"
-	colorBold   = "\x1b[1m"
+	reset  = "\x1b[0m"
+	red    = "\x1b[31m"
+	green  = "\x1b[32m"
+	yellow = "\x1b[33m"
+	blue   = "\x1b[34m"
+	purple = "\x1b[35m"
+	cyan   = "\x1b[36m"
+	bold   = "\x1b[1m"
 
 	portConnection string = "8800"
 	hostConnection string = "127.0.0.1"
 )
 
-func parseMedians(bufferedReader *bufio.Reader) ([]float64, float64, error) {
+func parseMedians(bufferedReader *bufio.Reader, currentGeneration int) ([]float64, float64, error) {
 	rawMedianHistory, err := core.ReadInputSliced(bufferedReader)
 	if err != nil {
 		return nil, 0.0, err
@@ -42,7 +42,7 @@ func parseMedians(bufferedReader *bufio.Reader) ([]float64, float64, error) {
 
 		medianHistory = append(medianHistory, median)
 
-		if len(rawMedianHistory)-1 == i {
+		if currentGeneration%5 == i {
 			currentMedian = median
 		}
 	}
@@ -104,20 +104,22 @@ func FirstGeneticCalculation(firstRocket core.Rocket, populationSize int, maximu
 
 	initialPopulation = append(initialPopulation, firstRocket)
 
-	if populationSize > 5 {
-		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 45.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
+	if populationSize > 6 {
+		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 135.0, YawDegree: 45.0, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
 
-		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 35.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: 8.0, EngineEfficiency: 2000.0})
+		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 135.0, YawDegree: 135.0, Fuel: 100.0, BurnRate: 8.0, EngineEfficiency: 2000.0})
 
-		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 65.0, YawDegree: firstRocket.YawDegree, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
+		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 45.0, YawDegree: 135.0, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
+
+		initialPopulation = append(initialPopulation, core.Rocket{PitchDegree: 45.0, YawDegree: 45.0, Fuel: 100.0, BurnRate: firstRocket.BurnRate, EngineEfficiency: 2000.0})
 	}
 
 	for i := len(initialPopulation); i < populationSize; i++ {
-		pitchRand := firstRocket.PitchDegree + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-		yawRand := firstRocket.YawDegree + (((rand.Float64() * 2.0) - 1.0) * 5.0)
-		fuelRand := firstRocket.Fuel + (((rand.Float64() * 2.0) - 1.0) * (firstRocket.Fuel * 0.1))
-		burnRateRand := firstRocket.BurnRate + (((rand.Float64() * 2.0) - 1.0) * 0.5)
-		engineEfficiencyRand := firstRocket.EngineEfficiency + ((rand.Float64()*10.0 - 5.0) * 400.0)
+		pitchRand := firstRocket.PitchDegree + (((rand.Float64() * 20.0) - 10.0) * 50.0)
+		yawRand := firstRocket.YawDegree + (((rand.Float64() * 20.0) - 10.0) * 50.0)
+		fuelRand := firstRocket.Fuel + (((rand.Float64() * 20.0) - 10.0) * (firstRocket.Fuel * 0.1))
+		burnRateRand := firstRocket.BurnRate + (((rand.Float64() * 20.0) - 10.0) * 5)
+		engineEfficiencyRand := firstRocket.EngineEfficiency + ((rand.Float64()*100.0 - 50.0) * 4000.0)
 
 		rocketRand := core.Rocket{
 			PitchDegree:      pitchRand,
@@ -258,53 +260,53 @@ func GeneticCalculation(bestRockets []core.Rocket, populationSize int, medianHis
 func main() {
 	address := net.JoinHostPort(hostConnection, portConnection)
 
-	fmt.Printf("🌐 %s[NETWORK]%s Attempting to reach server at %s...\n", colorCyan, colorReset, address)
+	fmt.Printf("🌐 %s[NETWORK]%s Attempting to reach server at %s...\n", cyan, reset, address)
 	connection, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
 		fmt.Printf("❌ %s%s[CONNECTION FAILED]%s Could not connect to remote host: %v\n",
-			colorRed, colorBold, colorReset, err)
+			red, bold, reset, err)
 		return
 	}
 	defer connection.Close()
-	fmt.Printf("✅ %s[CONNECTED]%s Established network connection to server.\n", colorGreen, colorReset)
+	fmt.Printf("✅ %s[CONNECTED]%s Established network connection to server.\n", green, reset)
 
 	reader := bufio.NewReader(connection)
 	tools := core.CreateTools(connection, reader)
 	defer func() {
 		if err := tools.Writer.Flush(); err != nil {
-			fmt.Printf("⚠️  %s[IO WARNING]%s Failed to flush data buffer on exit: %v\n", colorYellow, colorReset, err)
+			fmt.Printf("⚠️  %s[IO WARNING]%s Failed to flush data buffer on exit: %v\n", yellow, reset, err)
 		} else {
-			fmt.Printf("✨ %s[CLEAN EXIT]%s All pending network data flushed successfully.\n", colorGreen, colorReset)
+			fmt.Printf("✨ %s[CLEAN EXIT]%s All pending network data flushed successfully.\n", green, reset)
 		}
 	}()
 
 	_, err = fmt.Fprintln(tools.Writer, "I|AM|ALGORITHM")
 	if err != nil {
-		fmt.Printf("❌ %s[HANDSHAKE FAILED]%s Could not send identity packet: %v\n", colorRed, colorReset, err)
+		fmt.Printf("❌ %s[HANDSHAKE FAILED]%s Could not send identity packet: %v\n", red, reset, err)
 		return
 	}
 	tools.Writer.Flush()
-	fmt.Printf("🤝 %s[HANDSHAKE]%s Identification sent successfully: %sI|AM|ALGORITHM%s\n", colorBlue, colorReset, colorPurple, colorReset)
+	fmt.Printf("🤝 %s[HANDSHAKE]%s Identification sent successfully: %sI|AM|ALGORITHM%s\n", blue, reset, purple, reset)
 
 	maximumBurnRate := 0.0
 	bodyMass := 0.0
 	populationSize := 0
 
-	fmt.Printf("📡 %s[LISTENING]%s Waiting for commands from server...\n", colorCyan, colorReset)
+	fmt.Printf("📡 %s[LISTENING]%s Waiting for commands from server...\n", cyan, reset)
 	for {
 		readedCommand, err := core.ReadInput(tools.Reader)
 		if err != nil {
-			fmt.Printf("\n❌ %s[NETWORK ERROR]%s Connection lost with the server: %v\n", colorRed, colorReset, err)
+			fmt.Printf("\n❌ %s[NETWORK ERROR]%s Connection lost with the server: %v\n", red, reset, err)
 			return
 		}
 
 		switch readedCommand {
 		case "COMMAND1":
-			fmt.Printf("\n⚡ %s[INITIALIZATION]%s Generating starting population...\n", colorBlue, colorReset)
+			fmt.Printf("\n⚡ %s[INITIALIZATION]%s Generating starting population...\n", blue, reset)
 
 			rawPopulationSize, rawMaximumBurnRate, firstRocket, err := parseFirstCharacterisics(tools.Reader)
 			if err != nil {
-				fmt.Printf("💥 %s[PARSING ERROR]%s Failed to parse initial characteristics: %v\n", colorRed, colorReset, err)
+				fmt.Printf("💥 %s[PARSING ERROR]%s Failed to parse initial characteristics: %v\n", red, reset, err)
 				continue
 			}
 
@@ -320,40 +322,39 @@ func main() {
 					population[i].PitchDegree, population[i].YawDegree, population[i].Fuel,
 					population[i].BurnRate, population[i].BodyMass, population[i].EngineEfficiency)
 				if err != nil {
-					fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed sending specimen %d: %v\n", colorRed, colorReset, i, err)
+					fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed sending specimen %d: %v\n", red, reset, i, err)
 					return
 				}
 				tools.Writer.Flush()
 			}
 			fmt.Printf("🚀 %s[SUCCESS]%s Initial population of size %s%d%s successfully transmitted.\n",
-				colorGreen, colorReset, colorPurple, populationSize, colorReset)
+				green, reset, purple, populationSize, reset)
 
 		case "COMMAND2":
-			medianHistory, currentMedian, err := parseMedians(tools.Reader)
-			if err != nil {
-				fmt.Printf("\n💥 %s[PARSING ERROR]%s Failed to parse median history: %v\n", colorRed, colorReset, err)
-				continue
-			}
-
 			countGenerations, lengthRocket, err := parseCharaceristics(tools.Reader)
 			if err != nil {
-				fmt.Printf("\n💥 %s[PARSING ERROR]%s Failed to parse generation characteristics: %v\n", colorRed, colorReset, err)
+				fmt.Printf("\n💥 %s[PARSING ERROR]%s Failed to parse generation characteristics: %v\n", red, reset, err)
 				continue
 			}
 
+			medianHistory, currentMedian, err := parseMedians(tools.Reader, countGenerations)
+			if err != nil {
+				fmt.Printf("\n💥 %s[PARSING ERROR]%s Failed to parse median history: %v\n", red, reset, err)
+				continue
+			}
 			bestRockets, err := core.ParseNRocket(lengthRocket, tools.Reader)
 			if err != nil {
-				fmt.Printf("\n💥 %s[PARSING ERROR]%s Failed parsing best rockets from server: %v\n", colorRed, colorReset, err)
+				fmt.Printf("\n💥 %s[PARSING ERROR]%s Failed parsing best rockets from server: %v\n", red, reset, err)
 				continue
 			}
 
 			if populationSize == 0 || bodyMass == 0 {
-				fmt.Printf("\n⚠️  %s[STATE ERROR]%s COMMAND2 received before data initialization. Skipping.\n", colorYellow, colorReset)
+				fmt.Printf("\n⚠️  %s[STATE ERROR]%s COMMAND2 received before data initialization. Skipping.\n", yellow, reset)
 				continue
 			}
 
 			fmt.Printf("\n🔄 %s[EVOLUTION]%s Processing %sGeneration #%d%s | Best Parent Miss: %s%.2f m%s\n",
-				colorCyan, colorReset, colorPurple, countGenerations, colorReset, colorYellow, currentMedian, colorReset)
+				cyan, reset, purple, countGenerations, reset, yellow, currentMedian, reset)
 
 			population := GeneticCalculation(bestRockets, populationSize, medianHistory, currentMedian, bodyMass, maximumBurnRate, countGenerations)
 
@@ -362,20 +363,20 @@ func main() {
 					population[i].PitchDegree, population[i].YawDegree, population[i].Fuel,
 					population[i].BurnRate, population[i].BodyMass, population[i].EngineEfficiency)
 				if err != nil {
-					fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed sending generation specimen %d: %v\n", colorRed, colorReset, i, err)
+					fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed sending generation specimen %d: %v\n", red, reset, i, err)
 					return
 				}
 				tools.Writer.Flush()
 			}
 			fmt.Printf("🧬 %s[SUCCESS]%s Generation %s%d%s evolved. New DNA payload sent back.\n",
-				colorGreen, colorReset, colorPurple, countGenerations, colorReset)
+				green, reset, purple, countGenerations, reset)
 
 		case "FINISHWORKING":
-			fmt.Printf("\n🛑 %s[SHUTDOWN]%s Received termination command from server. Exiting gracefully...\n", colorYellow, colorReset)
+			fmt.Printf("\n🛑 %s[SHUTDOWN]%s Received termination command from server. Exiting gracefully...\n", yellow, reset)
 			return
 
 		default:
-			fmt.Printf("\n⚠️  %s[UNKNOWN COMMAND]%s Received unexpected instruction from server: %q\n", colorYellow, colorReset, readedCommand)
+			fmt.Printf("\n⚠️  %s[UNKNOWN COMMAND]%s Received unexpected instruction from server: %q\n", yellow, reset, readedCommand)
 		}
 	}
 }

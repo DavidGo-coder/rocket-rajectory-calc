@@ -55,14 +55,14 @@ func ValidationRocket(rocket Rocket, maximumBurnRate float64) Rocket {
 	if rocket.PitchDegree <= 1 {
 		rocket.PitchDegree = 1
 	}
-	if rocket.PitchDegree >= 89 {
-		rocket.PitchDegree = 89
+	if rocket.PitchDegree >= 179 {
+		rocket.PitchDegree = 179
 	}
 	if rocket.YawDegree <= 1 {
 		rocket.YawDegree = 1
 	}
-	if rocket.YawDegree >= 89 {
-		rocket.YawDegree = 89
+	if rocket.YawDegree >= 179 {
+		rocket.YawDegree = 179
 	}
 	if rocket.Fuel < 5.0 {
 		rocket.Fuel = 5.0

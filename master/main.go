@@ -16,16 +16,16 @@ const (
 	portConnection    string = "8800"
 	timeOneGeneration        = 3 * time.Second
 	medianHisorySize  int    = 5
-	totalProgram             = 4
+	totalProgram             = 5
 
-	colorReset  = "\x1b[0m"
-	colorRed    = "\x1b[31m"
-	colorGreen  = "\x1b[32m"
-	colorYellow = "\x1b[33m"
-	colorBlue   = "\x1b[34m"
-	colorPurple = "\x1b[35m"
-	colorCyan   = "\x1b[36m"
-	colorBold   = "\x1b[1m"
+	reset      = "\x1b[0m"
+	red        = "\x1b[31m"
+	colorGreen = "\x1b[32m"
+	yellow     = "\x1b[33m"
+	blue       = "\x1b[34m"
+	purple     = "\x1b[35m"
+	cyan       = "\x1b[36m"
+	bold       = "\x1b[1m"
 )
 
 func parseAdvancedRocketCharaceristics(rocketParameters []string) (core.Rocket, error) {
@@ -104,7 +104,7 @@ func parseNAdvancedRocket(totalRocket int, connectionReader *bufio.Reader) ([]co
 	return rockets, nil
 }
 
-func finishWorking(writer1 *bufio.Writer, writer2 *bufio.Writer, writer3 *bufio.Writer) error {
+func finishWorking(writer1, writer2, writer3, writer4 *bufio.Writer) error {
 	_, err := fmt.Fprintln(writer1, "FINISHWORKING")
 	if err != nil {
 		return err
@@ -122,6 +122,12 @@ func finishWorking(writer1 *bufio.Writer, writer2 *bufio.Writer, writer3 *bufio.
 		return err
 	}
 	writer3.Flush()
+
+	_, err = fmt.Fprintln(writer4, "FINISHWORKING")
+	if err != nil {
+		return err
+	}
+	writer4.Flush()
 	return nil
 }
 
@@ -130,16 +136,16 @@ func waitSlowPython(bufferedReader *bufio.Reader) error {
 
 	_, err := bufferedReader.ReadString('\n')
 	if err != nil && err != io.EOF {
-		fmt.Printf("🤬 %s[PYTHON CRASHED]%s Oh come on! The visualization client just walked out on us: %v\n", colorRed, colorBold, err)
+		fmt.Printf("🤬 %s[PYTHON CRASHED]%s Oh come on! The visualization client just walked out on us: %v\n", red, bold, err)
 		return err
 	}
 
 	if time.Since(currentTime) < timeOneGeneration {
 		timeSpent := time.Since(currentTime)
-		fmt.Printf("🥱 %s[WAITING FOR PYTHON]%s Calculations are too fast, Python is lagging behind... Napping for %v\n", colorYellow, colorReset, timeOneGeneration-timeSpent)
+		fmt.Printf("🥱 %s[WAITING FOR PYTHON]%s Calculations are too fast, Python is lagging behind... Napping for %v\n", yellow, reset, timeOneGeneration-timeSpent)
 		time.Sleep(timeOneGeneration - timeSpent)
 	}
-	fmt.Printf("✨ %s[SYNC SUCCESS]%s Python finally caught up! Generation data rendered beautifully! 🎉\n", colorGreen, colorReset)
+	fmt.Printf("✨ %s[SYNC SUCCESS]%s Python finally caught up! Generation data rendered beautifully! 🎉\n", colorGreen, reset)
 	return err
 }
 
@@ -230,6 +236,12 @@ func startAlgorithm(bufferedReader *bufio.Reader, bufferedWriter *bufio.Writer, 
 	}
 	bufferedWriter.Flush()
 
+	_, err = fmt.Fprintf(bufferedWriter, "%v|%v\n", countGenerations, len(bestRockets))
+	if err != nil {
+		return []core.Rocket{}, err
+	}
+	bufferedWriter.Flush()
+
 	for i := 0; i < len(medianHistory); i++ {
 		if i != 0 {
 			_, err = fmt.Fprint(bufferedWriter, "|")
@@ -238,18 +250,21 @@ func startAlgorithm(bufferedReader *bufio.Reader, bufferedWriter *bufio.Writer, 
 			}
 			bufferedWriter.Flush()
 		}
+		if i+1 == len(medianHistory) {
+			_, err = fmt.Fprintf(bufferedWriter, "%v\n", medianHistory[i])
+			if err != nil {
+				return []core.Rocket{}, err
+			}
+			bufferedWriter.Flush()
+			break
+		}
+
 		_, err = fmt.Fprintf(bufferedWriter, "%v", medianHistory[i])
 		if err != nil {
 			return []core.Rocket{}, err
 		}
 		bufferedWriter.Flush()
 	}
-
-	_, err = fmt.Fprintf(bufferedWriter, "\n%v|%v\n", countGenerations, len(bestRockets))
-	if err != nil {
-		return []core.Rocket{}, err
-	}
-	bufferedWriter.Flush()
 
 	for i := 0; i < len(bestRockets); i++ {
 		_, err = fmt.Fprintf(bufferedWriter, "%v|%v|%v|%v|%v|%v\n", bestRockets[i].PitchDegree, bestRockets[i].YawDegree, bestRockets[i].Fuel, bestRockets[i].BurnRate, bestRockets[i].BodyMass, bestRockets[i].EngineEfficiency)
@@ -325,26 +340,27 @@ func main() {
 	var inputTools core.ConnectionTools
 	var simulationTools core.ConnectionTools
 	var visualizationTools core.ConnectionTools
+	var printerTools core.ConnectionTools
 
 	listener, err := net.Listen("tcp", ":"+portConnection)
 	if err != nil {
-		fmt.Printf("🤬 %s[LAUNCH CRASH]%s Can't bind port %v! Did someone steal it?! Error: %v\n", colorRed, colorBold, portConnection, err)
+		fmt.Printf("🤬 %s[LAUNCH CRASH]%s Can't bind port %v! Did someone steal it?! Error: %v\n", red, bold, portConnection, err)
 		return
 	}
 
-	fmt.Printf("📡 %s[I AM ALIVE!]%s TCP Server successfully bound to port %s%v%s. Awaiting guests...\n", colorCyan, colorReset, colorPurple, portConnection, colorReset)
+	fmt.Printf("📡 %s[I AM ALIVE!]%s TCP Server successfully bound to port %s%v%s. Awaiting guests...\n", cyan, reset, purple, portConnection, reset)
 	defer listener.Close()
 
 	for countProgram := 0; countProgram < totalProgram; countProgram++ {
 		connection, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("😭 %s[HANDSHAKE ABORTED]%s A module tried to link up but crashed down: %v\n", colorRed, colorReset, err)
+			fmt.Printf("😭 %s[HANDSHAKE ABORTED]%s A module tried to link up but crashed down: %v\n", red, reset, err)
 		}
 		connectionReader := bufio.NewReader(connection)
 
 		obtainedData, err := connectionReader.ReadString('\n')
 		if err != nil {
-			fmt.Printf("🧐 %s[WHAT'S THAT NOISE?]%s Received totally unreadable garbage bytes: %v\n", colorYellow, colorReset, err)
+			fmt.Printf("🧐 %s[WHAT'S THAT NOISE?]%s Received totally unreadable garbage bytes: %v\n", yellow, reset, err)
 			return
 		}
 		obtainedData = strings.TrimSpace(obtainedData)
@@ -352,20 +368,23 @@ func main() {
 		switch obtainedData {
 		case "I|AM|PARSER":
 			inputTools = core.CreateTools(connection, connectionReader)
-			fmt.Printf("📥 %s[HELLO, PARSER!]%s Input module has entered the lobby. Config specs received!\n", colorBlue, colorReset)
+			fmt.Printf("📥 %s[HELLO, PARSER!]%s Input module has entered the lobby. Config specs received!\n", blue, reset)
 		case "I|AM|ALGORITHM":
 			geneticTools = core.CreateTools(connection, connectionReader)
-			fmt.Printf("🧬 %s[EVOLUTION IS HERE]%s Genetic algorithm hooked up. Ready to mutate some DNA!\n", colorPurple, colorReset)
+			fmt.Printf("🧬 %s[EVOLUTION IS HERE]%s Genetic algorithm hooked up. Ready to mutate some DNA!\n", purple, reset)
 		case "I|AM|PHYSICS":
 			simulationTools = core.CreateTools(connection, connectionReader)
-			fmt.Printf("🚀 %s[PHYSICS ALIGNED]%s Trajectory processing unit online. Gravity enabled!\n", colorCyan, colorReset)
+			fmt.Printf("🚀 %s[PHYSICS ALIGNED]%s Trajectory processing unit online. Gravity enabled!\n", cyan, reset)
 		case "I|AM|VISUALIZATION":
 			visualizationTools = core.CreateTools(connection, connectionReader)
-			fmt.Printf("🎨 %s[PYTHON APU ONLINE]%s Visual rendering engine attached. Let's make it look clean!\n", colorGreen, colorReset)
+			fmt.Printf("🎨 %s[PYTHON APU ONLINE]%s Visual rendering engine attached. Let's make it look clean!\n", colorGreen, reset)
+		case "I|AM|PRINTER":
+			printerTools = core.CreateTools(connection, connectionReader)
+			fmt.Printf("🖨️ %s[PRINTER READY]%s Logging node linked up. Prepare your papers, we are shifting into print mode!\n", bold, reset)
 		}
 	}
 
-	fmt.Println("\n🤩 " + colorGreen + "════════ NET ORCHESTRA ASSEMBLED! Let's start the show! ════════" + colorReset)
+	fmt.Println("\n🤩 " + colorGreen + "════════ NET ORCHESTRA ASSEMBLED! Let's start the show! ════════" + reset)
 
 	defer func() {
 		if inputTools.Conn != nil {
@@ -384,30 +403,40 @@ func main() {
 			_ = visualizationTools.Writer.Flush()
 			visualizationTools.Conn.Close()
 		}
+		if printerTools.Conn != nil {
+			_ = printerTools.Writer.Flush()
+			printerTools.Conn.Close()
+		}
 
 		fmt.Println("\n🛌 ────────────── SERVER IS GOING TO SLEEP ──────────────")
-		fmt.Printf("😴 %s[DISCONNECTING TUNNELS]%s All cluster nodes freed. Session cleared safely.\n", colorGreen, colorReset)
+		fmt.Printf("😴 %s[DISCONNECTING TUNNELS]%s All cluster nodes freed. Session cleared safely.\n", colorGreen, reset)
 		fmt.Println("💤 Simulation destroyed. Going offline... See you next launch! zZz...")
 		fmt.Println("───────────────────────────────────────────────────")
 	}()
 
-	defer finishWorking(geneticTools.Writer, simulationTools.Writer, visualizationTools.Writer)
+	defer finishWorking(geneticTools.Writer, simulationTools.Writer, visualizationTools.Writer, printerTools.Writer)
 
 	targetX, targetY, targetZ, populationSize, generations, firstRocket, maximumBurnRate, err := readAllInput(inputTools.Reader)
 	if err != nil {
-		fmt.Printf("😤 %s[DATA CORRUPTION]%s The parser sent completely broken metrics instead of numbers: %v\n", colorRed, colorReset, err)
+		fmt.Printf("😤 %s[DATA CORRUPTION]%s The parser sent completely broken metrics instead of numbers: %v\n", red, reset, err)
 	}
 
-	_, err = fmt.Fprintf(visualizationTools.Writer, "TARGET|%v,%v\n", targetX, targetY)
+	_, err = fmt.Fprintf(printerTools.Writer, "CHARACTERISTICS|%v|%v|%v|%v\n", generations, targetX, targetY, targetZ)
 	if err != nil {
-		fmt.Printf("😡 %s[NETWORK DISASTER]%s Couldn't stream target locked coordinates to Python engine: %v\n", colorRed, colorReset, err)
+		fmt.Printf("😠 %s[PRINTER FAULT]%s Failed to pipe initial simulation specs to the printer unit: %v\n", red, reset, err)
 		return
 	}
-	visualizationTools.Writer.Flush()
+	printerTools.Writer.Flush()
+
+	_, err = fmt.Fprintf(visualizationTools.Writer, "TARGET|%v|%v|%v\n", targetX, targetY, targetZ)
+	if err != nil {
+		fmt.Printf("😡 %s[NETWORK DISASTER]%s Couldn't stream target locked coordinates to Python engine: %v\n", red, reset, err)
+		return
+	}
 
 	rocketPopulation, err := startFirstAlgorithm(geneticTools.Reader, geneticTools.Writer, firstRocket, populationSize, maximumBurnRate)
 	if err != nil {
-		fmt.Printf("😰 %s[ALGORITHM FAILURE]%s Core engine broke on initial DNA sequence generation: %v\n", colorRed, colorReset, err)
+		fmt.Printf("😰 %s[ALGORITHM FAILURE]%s Core engine broke on initial DNA sequence generation: %v\n", red, reset, err)
 	}
 
 	medianHistory := make([]float64, medianHisorySize)
@@ -415,7 +444,7 @@ func main() {
 
 	for countGenerations := 0; countGenerations < generations; countGenerations++ {
 		fmt.Printf("\n⏳ %s[PROCESSING]%s Running natural selection loops: Gen %s%d/%d%s...\n",
-			colorCyan, colorReset, colorPurple, countGenerations+1, generations, colorReset)
+			cyan, reset, purple, countGenerations+1, generations, reset)
 
 		medianNextFitness, bestRockets2, err := startCalculation(simulationTools.Reader, simulationTools.Writer, targetX, targetY, targetZ, populationSize, rocketPopulation)
 		if countGenerations == 0 {
@@ -425,31 +454,48 @@ func main() {
 
 		medianHistory[(countGenerations)%medianHisorySize] = medianNextFitness
 
+		_, err = fmt.Fprintf(printerTools.Writer, "MEDIAN|%v\n", medianNextFitness)
+		if err != nil {
+			fmt.Printf("🤷 %s[METRIC LOSS]%s Eh... the median values just slipped out of my hands on the way to the printer: %v\n", yellow, reset, err)
+			return
+		}
+		printerTools.Writer.Flush()
+
+		var bestRocket core.Rocket
 		for id, rocket := range bestRockets2 {
+			if id == 0 || rocket.Fitness < bestRocket.Fitness {
+				bestRocket = rocket
+			}
 			if rocket.TrajectoryCSV == "" {
-				rocket.TrajectoryCSV = "0.00,0.00"
+				rocket.TrajectoryCSV = "0.00,0.00,0.00"
 			}
 
-			_, err = fmt.Fprintf(visualizationTools.Writer, "ROCKET_ID:%v;%v\n", id+1, rocket.TrajectoryCSV)
+			_, err = fmt.Fprintf(visualizationTools.Writer, "ROCKET_ID|%v|%v\n", id+1, rocket.TrajectoryCSV)
 			if err != nil {
-				fmt.Printf("🤬 %s[TRANSMISSION CRASH]%s Severe payload drop while routing flight charts: %v\n", colorRed, colorBold, err)
+				fmt.Printf("🤬 %s[TRANSMISSION CRASH]%s Severe payload drop while routing flight charts: %v\n", red, bold, err)
 				return
 			}
 			visualizationTools.Writer.Flush()
 
 			if rocket.Fitness <= adaptiveThreshold && rocket.Y > 5 {
-				fmt.Println("\n🎉🎉🎉 " + colorGreen + "══════════════════ OOOOH YEAH! WE HIT THE TARGET! ══════════════════" + colorReset + " 🎉🎉🎉")
-				fmt.Printf("🏆 %s[EUREKA!]%s Perfect trajectory optimized at Generation %s#%d%s!\n", colorGreen, colorReset, colorPurple, countGenerations+1, colorReset)
+				_, err = fmt.Fprintf(printerTools.Writer, "CHAMPION|%v|%v|%v|%v|%v|%v|%v|%v|%v\n", rocket.PitchDegree, rocket.YawDegree, rocket.Fuel, rocket.BurnRate, rocket.BodyMass, rocket.X, rocket.Y, rocket.Z, rocket.Fitness)
+				if err != nil {
+					fmt.Printf("🤦 %s[VICTORY BLUNDER]%s You won't believe it! We literally hit the target, but the printer choked on the final applause: %v\n", red, bold, err)
+					return
+				}
+				printerTools.Writer.Flush()
+				fmt.Println("\n🎉🎉🎉 " + colorGreen + "══════════════════ OOOOH YEAH! WE HIT THE TARGET! ══════════════════" + reset + " 🎉🎉🎉")
+				fmt.Printf("🏆 %s[EUREKA!]%s Perfect trajectory optimized at Generation %s#%d%s!\n", colorGreen, reset, purple, countGenerations+1, reset)
 				fmt.Printf("📊 Champion Specs:\n")
-				fmt.Printf("   • Launch Angle :  %s%.2f°%s\n", colorCyan, rocket.PitchDegree, colorReset)
-				fmt.Printf("   • Fuel Load    :  %s%.2f kg%s\n", colorCyan, rocket.Fuel, colorReset)
-				fmt.Printf("   • Fuel Burn    :  %s%.2f kg/s%s\n", colorCyan, rocket.BurnRate, colorReset)
+				fmt.Printf("   • Launch Angle :  %s%.2f°%s\n", cyan, rocket.PitchDegree, reset)
+				fmt.Printf("   • Fuel Load    :  %s%.2f kg%s\n", cyan, rocket.Fuel, reset)
+				fmt.Printf("   • Fuel Burn    :  %s%.2f kg/s%s\n", cyan, rocket.BurnRate, reset)
 				fmt.Printf("--------------------------------------------------\n")
 				fmt.Printf("📈 Flight Summary Matrix:\n")
-				fmt.Printf("   • Final X Pos  :  %s%.2f meters%s\n", colorGreen, rocket.X, colorReset)
-				fmt.Printf("   • Max Altitude :  %s%.2f meters%s\n", colorPurple, rocket.Y, colorReset)
-				fmt.Printf("   • Target Miss  :  %s%.2f meters%s (Threshold Limit: %.2f)\n", colorYellow, rocket.Fitness, colorReset, adaptiveThreshold)
-				fmt.Println(colorGreen + "══════════════════════════════════════════════════════════" + colorReset)
+				fmt.Printf("   • Final X Pos  :  %s%.2f meters%s\n", colorGreen, rocket.X, reset)
+				fmt.Printf("   • Max Altitude :  %s%.2f meters%s\n", purple, rocket.Y, reset)
+				fmt.Printf("   • Target Miss  :  %s%.2f meters%s (Threshold Limit: %.2f)\n", yellow, rocket.Fitness, reset, adaptiveThreshold)
+				fmt.Println(colorGreen + "══════════════════════════════════════════════════════════" + reset)
 
 				fmt.Println("\n👋 [SYSTEM] Mission completed successfully. Initializing orderly power-down sequence...")
 				time.Sleep(1 * time.Second)
@@ -457,16 +503,29 @@ func main() {
 			}
 		}
 
+		_, err = fmt.Fprintln(visualizationTools.Writer, "END_OF_GENERATION")
+		if err != nil {
+			fmt.Printf("an error occured: %v", err)
+		}
+		visualizationTools.Writer.Flush()
+
+		_, err = fmt.Fprintf(printerTools.Writer, "GENERATION_CHAMPION|%v|%v|%v|%v|%v|%v|%v|%v|%v\n", bestRocket.PitchDegree, bestRocket.YawDegree, bestRocket.Fuel, bestRocket.BurnRate, bestRocket.BodyMass, bestRocket.X, bestRocket.Y, bestRocket.Z, bestRocket.Fitness)
+		if err != nil {
+			fmt.Printf("🙄 %s[PRINTER SLACKING]%s The generation leader specs didn't go through. Whatever, Python will survive without it: %v\n", yellow, reset, err)
+			return
+		}
+		printerTools.Writer.Flush()
+
 		err = waitSlowPython(visualizationTools.Reader)
 		if err != nil {
-			fmt.Printf("❌ %s[CRITICAL PIPELINE SYNC]%s Python framework locked up on Gen %d: %v\n", colorRed, colorReset, countGenerations+1, err)
+			fmt.Printf("❌ %s[CRITICAL PIPELINE SYNC]%s Python framework locked up on Gen %d: %v\n", red, reset, countGenerations+1, err)
 			return
 		}
 		rocketPopulation, err = startAlgorithm(geneticTools.Reader, geneticTools.Writer, bestRockets2, populationSize, countGenerations+1, medianHistory)
 		if err != nil {
-			fmt.Printf("😰 %s[ALGORITHM FAILURE]%s DNA crossover error occurred on Gen %d: %v\n", colorRed, colorReset, countGenerations+1, err)
+			fmt.Printf("😰 %s[ALGORITHM FAILURE]%s DNA crossover error occurred on Gen %d: %v\n", red, reset, countGenerations+1, err)
 		}
 	}
 
-	fmt.Printf("\n😮 %s[BOUNDARIES MET]%s Generation limits exhausted, target threshold not hit. Well, at least we tried our best!\n", colorYellow, colorReset)
+	fmt.Printf("\n😮 %s[BOUNDARIES MET]%s Generation limits exhausted, target threshold not hit. Well, at least we tried our best!\n", yellow, reset)
 }

@@ -15,13 +15,13 @@ import (
 const (
 	portConnection string = "8800"
 	hostConnection string = "127.0.0.1"
-	colorReset            = "\x1b[0m"
-	colorRed              = "\x1b[31m"
-	colorGreen            = "\x1b[32m"
-	colorYellow           = "\x1b[33m"
-	colorBlue             = "\x1b[34m"
-	colorCyan             = "\x1b[36m"
-	colorBold             = "\x1b[1m"
+	reset                 = "\x1b[0m"
+	red                   = "\x1b[31m"
+	green                 = "\x1b[32m"
+	yellow                = "\x1b[33m"
+	blue                  = "\x1b[34m"
+	cyan                  = "\x1b[36m"
+	bold                  = "\x1b[1m"
 )
 
 func readCalculationParameters(listCharacerisics []string) (int, int, int, int, int, error) {
@@ -79,6 +79,7 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 	type ResultSimulation struct {
 		x             float64
 		y             float64
+		z             float64
 		trajectoryCSV string
 		score         float64
 		resultIndex   int
@@ -91,8 +92,10 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 			defer wg.Done()
 
 			pitchRadians := pitchDegree * math.Pi / 180.0
-			vx, vy := 0.0, 0.0
-			x, y := 0.0, 0.0
+			yawRadians := yawDegree * math.Pi / 180.0
+
+			vx, vy, vz := 0.0, 0.0, 0.0
+			x, y, z := 0.0, 0.0, 0.0
 			time := 0.0
 			maxY := 0.0
 
@@ -101,8 +104,9 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 
 			targetX := float64(targetCoordinateX)
 			targetY := float64(targetCoordinateY)
+			targetZ := float64(targetCoordinateZ)
 
-			minDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY)
+			minDistToTarget := math.Sqrt(targetX*targetX + targetY*targetY + targetZ*targetZ)
 
 			for time < 275.0 {
 				currentMass := bodyMass + fuel
@@ -110,7 +114,7 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 					currentMass = 0.1
 				}
 
-				var thrustForceX, thrustForceY float64
+				var thrustForceX, thrustForceY, thrustForceZ float64
 				if fuel > 0 {
 					dynamicThrust := burnRate * engineEfficiency
 
@@ -122,18 +126,20 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 						fuel -= fuelConsumed
 					}
 
-					thrustForceX = dynamicThrust * math.Cos(pitchRadians)
+					thrustForceX = dynamicThrust * math.Cos(pitchRadians) * math.Cos(yawRadians)
+					thrustForceZ = dynamicThrust * math.Cos(pitchRadians) * math.Sin(yawRadians)
 					thrustForceY = dynamicThrust * math.Sin(pitchRadians)
 				}
 
-				var fdragX, fdragY float64
-				v := math.Sqrt(vx*vx + vy*vy)
+				var fdragX, fdragY, fdragZ float64
+				v := math.Sqrt(vx*vx + vy*vy + vz*vz)
 				if v > 0.001 {
 					currentDragCoef := core.AirResistance * math.Exp(-y/8500.0)
 					fdragTotal := currentDragCoef * v * v
 
 					fdragX = fdragTotal * (vx / v)
 					fdragY = fdragTotal * (vy / v)
+					fdragZ = fdragTotal * (vz / v)
 				}
 
 				t := core.RadiusPlanetEarth / (core.RadiusPlanetEarth + y)
@@ -141,11 +147,15 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 
 				ax := (thrustForceX - fdragX) / currentMass
 				ay := ((thrustForceY - fdragY) / currentMass) - currentGravitation
+				az := (thrustForceZ - fdragZ) / currentMass
 
 				x += vx * core.OneMomentSimulation
 				y += vy * core.OneMomentSimulation
+				z += vz * core.OneMomentSimulation
+
 				vx += ax * core.OneMomentSimulation
 				vy += ay * core.OneMomentSimulation
+				vz += az * core.OneMomentSimulation
 
 				if y <= 0 && vy < 0 {
 					y = 0
@@ -155,7 +165,7 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 						x -= vx * core.OneMomentSimulation
 						vx = 0
 						vy = 0
-						trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
+						trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f,%.2f", x, y, z))
 						break
 					}
 				}
@@ -166,14 +176,15 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 
 				dx := targetX - x
 				dy := targetY - y
-				currentDist := math.Sqrt(dx*dx + dy*dy)
+				dz := targetZ - z
+				currentDist := math.Sqrt(dx*dx + dy*dy + dz*dz)
 
 				if currentDist < minDistToTarget {
 					minDistToTarget = currentDist
 				}
 
 				if stepCounter%50 == 0 {
-					trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f", x, y))
+					trajectoryPoints = append(trajectoryPoints, fmt.Sprintf("%.2f,%.2f,%.2f", x, y, z))
 				}
 				stepCounter++
 				time += core.OneMomentSimulation
@@ -210,7 +221,6 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 		return rocketPopulation[i].Fitness < rocketPopulation[j].Fitness
 	})
 
-	// --- КРАСИВЫЙ И ИНФОРМАТИВНЫЙ ВЫВОД ---
 	medianFitness := rocketPopulation[populationSize/2].Fitness
 	bestFitness := rocketPopulation[0].Fitness
 	bestMaxY := rocketPopulation[0].Y
@@ -233,39 +243,39 @@ func CalculationTrajectory(targetCoordinateX, targetCoordinateY, targetCoordinat
 func main() {
 	address := net.JoinHostPort(hostConnection, portConnection)
 
-	fmt.Printf("🌐 %s[NETWORK]%s Attempting to connect to remote host at %s...\n", colorCyan, colorReset, address)
+	fmt.Printf("🌐 %s[NETWORK]%s Attempting to connect to remote host at %s...\n", cyan, reset, address)
 	connection, err := net.Dial("tcp", address)
 	if err != nil {
 		fmt.Printf("❌ %s%s[CONNECTION ERROR]%s Could not establish connection to remote host at %v: %v\n",
-			colorRed, colorBold, colorReset, address, err)
+			red, bold, reset, address, err)
 		return
 	}
 	defer connection.Close()
-	fmt.Printf("✅ %s[CONNECTED]%s Successfully established TCP tunnel with server.\n", colorGreen, colorReset)
+	fmt.Printf("✅ %s[CONNECTED]%s Successfully established TCP tunnel with server.\n", green, reset)
 
 	reader := bufio.NewReader(connection)
 	tools := core.CreateTools(connection, reader)
 
 	defer func() {
 		if err := tools.Writer.Flush(); err != nil {
-			fmt.Printf("❌ %s[IO ERROR]%s Failed to flush final data buffer to network: %v\n", colorRed, colorReset, err)
+			fmt.Printf("❌ %s[IO ERROR]%s Failed to flush final data buffer to network: %v\n", red, reset, err)
 		} else {
-			fmt.Printf("✨ %s[SUCCESS]%s Data synchronization completed successfully. Connection closed cleanly.\n", colorGreen, colorReset)
+			fmt.Printf("✨ %s[SUCCESS]%s Data synchronization completed successfully. Connection closed cleanly.\n", green, reset)
 		}
 	}()
 
 	_, err = fmt.Fprintln(tools.Writer, "I|AM|PHYSICS")
 	if err != nil {
-		fmt.Printf("❌ %s[HANDSHAKE FAILED]%s Protocol verification message rejected by server: %v\n", colorRed, colorReset, err)
+		fmt.Printf("❌ %s[HANDSHAKE FAILED]%s Protocol verification message rejected by server: %v\n", red, reset, err)
 		return
 	}
 	tools.Writer.Flush()
-	fmt.Printf("🤝 %s[HANDSHAKE]%s Sent identity 'I|AM|PHYSICS' to remote server.\n", colorBlue, colorReset)
+	fmt.Printf("🤝 %s[HANDSHAKE]%s Sent identity 'I|AM|PHYSICS' to remote server.\n", blue, reset)
 
 	for {
 		obtainedCommand, err := core.ReadInput(tools.Reader)
 		if err != nil {
-			fmt.Printf("❌ %s[NETWORK DISCONNECT]%s Connection lost or closed by remote host: %v\n", colorRed, colorReset, err)
+			fmt.Printf("❌ %s[NETWORK DISCONNECT]%s Connection lost or closed by remote host: %v\n", red, reset, err)
 			return
 		}
 
@@ -273,22 +283,22 @@ func main() {
 		case "COMMAND1":
 			listCharacerisics, err := core.ReadInputSliced(tools.Reader)
 			if err != nil {
-				fmt.Printf("❌ %s[DATA ERROR]%s Failed to read simulation configuration parameters: %v\n", colorRed, colorReset, err)
+				fmt.Printf("❌ %s[DATA ERROR]%s Failed to read simulation configuration parameters: %v\n", red, reset, err)
 				continue
 			}
 
 			targetX, targetY, targetZ, populationSize, length, err := readCalculationParameters(listCharacerisics)
 			if err != nil {
-				fmt.Printf("❌ %s[PARSING ERROR]%s Invalid format in simulation parameters: %v\n", colorRed, colorReset, err)
+				fmt.Printf("❌ %s[PARSING ERROR]%s Invalid format in simulation parameters: %v\n", red, reset, err)
 				continue
 			}
 
-			fmt.Printf("📥 %s[COMMAND1]%s Received config. Target: (%d, %d, %d) | Pop Size: %d\n",
-				colorBlue, colorReset, targetX, targetY, targetZ, populationSize)
+			fmt.Printf("📥 %s[COMMAND1]%s Received command. Target: (%d, %d, %d) | Population Size: %d\n",
+				blue, reset, targetX, targetY, targetZ, populationSize)
 
 			rocketPopulation, err := core.ParseNRocket(length, tools.Reader)
 			if err != nil {
-				fmt.Printf("❌ %s[PARSE ERROR]%s Failed to parse population DNA: %v\n", colorRed, colorReset, err)
+				fmt.Printf("❌ %s[PARSE ERROR]%s Failed to parse population DNA: %v\n", red, reset, err)
 				continue
 			}
 
@@ -296,7 +306,7 @@ func main() {
 
 			_, err = fmt.Fprintf(tools.Writer, "%v|%v\n", median, len(bestRockets))
 			if err != nil {
-				fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed to send generational median score to server: %v\n", colorRed, colorReset, err)
+				fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed to send generational median score to server: %v\n", red, reset, err)
 			}
 			tools.Writer.Flush()
 
@@ -304,19 +314,19 @@ func main() {
 				currentRocket := bestRockets[i]
 				_, err := fmt.Fprintf(tools.Writer, "%v|%v|%v|%v|%v|%v|%v|%v|%v|%v|%v\n", currentRocket.PitchDegree, currentRocket.YawDegree, currentRocket.Fuel, currentRocket.BurnRate, currentRocket.BodyMass, currentRocket.EngineEfficiency, currentRocket.X, currentRocket.Y, currentRocket.Z, currentRocket.Fitness, currentRocket.TrajectoryCSV)
 				if err != nil {
-					fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed to stream optimized rocket DNA payload back to server: %v\n", colorRed, colorReset, err)
+					fmt.Printf("❌ %s[TRANSMISSION ERROR]%s Failed to stream optimized rocket DNA payload back to server: %v\n", red, reset, err)
 					break
 				}
 				tools.Writer.Flush()
 			}
 			fmt.Printf("📤 %s[TRANSMISSION]%s Successfully sent back median (%.2f) and %d best rocket DNA sets.\n",
-				colorGreen, colorReset, median, len(bestRockets))
+				green, reset, median, len(bestRockets))
 
 		case "FINISHWORKING":
-			fmt.Printf("🛑 %s[SHUTDOWN]%s Received termination command from server. Exiting...\n", colorYellow, colorReset)
+			fmt.Printf("🛑 %s[SHUTDOWN]%s Received termination command from server. Exiting...\n", yellow, reset)
 			return
 		default:
-			fmt.Printf("⚠️  %s[PROTOCOL WARNING]%s Received unknown command sequence from server: %s\n", colorYellow, colorReset, obtainedCommand)
+			fmt.Printf("⚠️  %s[PROTOCOL WARNING]%s Received unknown command sequence from server: %s\n", yellow, reset, obtainedCommand)
 			continue
 		}
 	}

@@ -1,4 +1,4 @@
-# 🚀 Rocket Trajectory Distributed Genetic Optimization Cluster (v1.5.0)
+# 🚀 Rocket Trajectory Distributed Genetic Optimization Cluster (v2.0.0)
 
 A high-performance, concurrent **distributed evolutionary simulation complex** designed to optimize rocket launch parameters. The ecosystem has been completely re-engineered from a monolithic design into a **mesh of 5 independent nodes (microservices)** communicating over serialized real-time TCP sockets.
 
